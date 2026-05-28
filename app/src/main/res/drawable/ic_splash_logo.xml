@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+    <!-- Glow circle -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:fillAlpha="0.12"
+        android:pathData="M36,36m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0" />
+    <!-- Outer ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeWidth="1.5"
+        android:strokeColor="#3B82F6"
+        android:strokeAlpha="0.2"
+        android:pathData="M36,36m-32,0a32,32 0,1 1,64 0a32,32 0,1 1,-64 0" />
+    <!-- Clean music note head -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M26,52 C23,52 20.5,54.5 20.5,57.5 C20.5,60.5 23,63 26,63 C29,63 31.5,60.5 31.5,57.5 C31.5,54.5 29,52 26,52 Z" />
+    <!-- Stem -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M31.5,57.5 L31.5,30 L50,25 L50,28.5 L35,32.5 L35,57.5 Z" />
+    <!-- Flag -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M40,28 C43,25.5 47,25 50,25 L50,28.5 C47.5,28.5 44.5,29 42,31 Z" />
+</vector>

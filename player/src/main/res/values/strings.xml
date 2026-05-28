@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_name">Music Playback</string>
+    <string name="notification_channel_desc">Controls music playback</string>
+    <string name="app_widget_name">Aura Music</string>
+    <string name="app_name">Aura Music</string>
+    <string name="no_songs_found">No songs found</string>
+    <string name="notification_title">Aura Music</string>
+    <string name="no_music_playing">No music playing</string>
+    <string name="play_action">Play</string>
+    <string name="pause_action">Pause</string>
+    <string name="previous_action">Previous</string>
+    <string name="next_action">Next</string>
+    <string name="close_action">Close</string>
+    <string name="widget_description">Aura Music controls</string>
+</resources>

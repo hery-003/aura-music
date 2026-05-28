@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="60dp"
+    android:viewportWidth="200"
+    android:viewportHeight="60">
+    <!-- Glow circle -->
+    <path
+        android:fillColor="#1A8B5CF6"
+        android:pathData="M15,30m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    <!-- Music note -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M15,42 C10,42 6,45 6,49 C6,53 10,55 15,55 C20,55 24,53 24,49 L24,18 L36,14 L36,22 L24,26 Z" />
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M24,22 L36,18 L36,20 L24,24 Z" />
+    <!-- AURA -->
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M48,45 L58,18 L68,45 M52,38 L64,38" />
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M74,45 L74,18 L84,18 C92,18 92,28 84,28 L74,28" />
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M92,45 L92,18 L102,18 C110,18 110,32 102,32 L92,32 M92,32 L104,45" />
+    <!-- MUSIC -->
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M118,45 L118,18 L128,18 L128,35 L140,18 L140,45" />
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M146,45 L146,18 L156,18 C164,18 164,28 156,28 L146,28 M146,28 L158,45" />
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M164,45 L164,18 L174,18 C182,18 182,32 174,32 L164,32" />
+</vector>

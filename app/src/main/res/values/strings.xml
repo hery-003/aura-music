@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Aura Music</string>
+    <string name="now_playing">Now Playing</string>
+    <string name="home">Home</string>
+    <string name="library">Library</string>
+    <string name="search">Search</string>
+    <string name="settings">Settings</string>
+    <string name="playlists">Playlists</string>
+    <string name="favorites">Favorites</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="recently_added">Recently Added</string>
+    <string name="most_played">Most Played</string>
+    <string name="songs">Songs</string>
+    <string name="artists">Artists</string>
+    <string name="albums">Albums</string>
+    <string name="genres">Genres</string>
+    <string name="folders">Folders</string>
+    <string name="queue">Queue</string>
+    <string name="queue_empty">Queue is empty</string>
+    <string name="no_songs_found">No songs found</string>
+    <string name="scanning_music">Scanning music…</string>
+    <string name="create_playlist">Create Playlist</string>
+    <string name="delete_playlist">Delete Playlist</string>
+    <string name="add_to_playlist">Add to Playlist</string>
+    <string name="sleep_timer">Sleep Timer</string>
+    <string name="equalizer">Equalizer</string>
+    <string name="visualizer">Visualizer</string>
+    <string name="audio_quality">Audio Quality</string>
+    <string name="scanning_your_music">Scanning your music…</string>
+    <string name="see_all">See all</string>
+    <string name="play">Play</string>
+    <string name="empty_library">Your music library is empty</string>
+    <string name="no_artists_found">No artists found</string>
+    <string name="no_albums_found">No albums found</string>
+    <string name="no_playlists_yet">No playlists yet</string>
+    <string name="create_first_playlist">Create your first playlist to organize your music</string>
+    <string name="new_playlist">New Playlist</string>
+    <string name="no_genres_found">No genres found</string>
+    <string name="no_genre_tags">Your music doesn\'t have genre tags</string>
+    <string name="no_folders_found">No folders found</string>
+    <string name="folders_description">Your music files are stored in folders</string>
+    <string name="back">Back</string>
+    <string name="search_hint">Search songs, artists, playlists…</string>
+    <string name="clear">Clear</string>
+    <string name="search_your_music">Search your music</string>
+    <string name="search_subtitle">Find songs, artists, playlists, and folders</string>
+    <string name="no_results">No results found</string>
+    <string name="try_different_term">Try a different search term</string>
+    <string name="theme">Theme</string>
+    <string name="crossfade">Crossfade</string>
+    <string name="audio">Audio</string>
+    <string name="storage">Storage</string>
+    <string name="gamer_mode">Gamer Mode</string>
+    <string name="amoled">AMOLED</string>
+    <string name="neon">Neon</string>
+    <string name="dynamic">Dynamic</string>
+    <string name="monet">Monet</string>
+    <string name="normal">Normal</string>
+    <string name="bass_boost">Bass Boost</string>
+    <string name="rock">Rock</string>
+    <string name="pop">Pop</string>
+    <string name="jazz">Jazz</string>
+    <string name="classical">Classical</string>
+    <string name="gamer">Gamer</string>
+    <string name="custom">Custom</string>
+    <string name="no_eq_bands">No equalizer bands available</string>
+    <string name="custom_band_levels">Custom Band Levels</string>
+    <string name="crossfade_songs">Crossfade Songs</string>
+    <string name="crossfade_duration">Crossfade Duration</string>
+    <string name="seconds_format">%ds</string>
+    <string name="show_visualizer">Show Visualizer</string>
+    <string name="visualizer_subtitle">Display waveform on now playing</string>
+    <string name="high">High</string>
+    <string name="audio_quality_hint">High quality uses more storage for cached audio data</string>
+    <string name="animations">Animations</string>
+    <string name="animations_subtitle">Enable animated transitions and effects</string>
+    <string name="timer_active">Timer Active</string>
+    <string name="music_will_stop">Music will stop when timer ends</string>
+    <string name="set_timer">Set a timer to stop playback</string>
+    <string name="stop">Stop</string>
+    <string name="set">Set</string>
+    <string name="cancel">Cancel</string>
+    <string name="rgb_effects">RGB effects &amp; enhanced audio</string>
+    <string name="accent_color">Accent Color</string>
+    <string name="rescan_music">Rescan Music</string>
+    <string name="no_track_selected">No track selected</string>
+    <string name="toggle_favorite">Toggle Favorite</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="previous">Previous</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="repeat">Repeat</string>
+    <string name="delete_playlist_title">Delete Playlist</string>
+    <string name="delete_playlist_confirm">Are you sure you want to delete \"%s\"?</string>
+    <string name="delete">Delete</string>
+    <string name="edit_playlist">Edit Playlist</string>
+    <string name="name">Name</string>
+    <string name="description_optional">Description (optional)</string>
+    <string name="save">Save</string>
+    <string name="done_reordering">Done reordering</string>
+    <string name="reorder_songs">Reorder songs</string>
+    <string name="delete_playlist_cd">Delete playlist</string>
+    <string name="shuffle_play">Shuffle Play</string>
+    <string name="play_all">Play All</string>
+    <string name="no_songs_in_playlist">No songs in this playlist</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+    <string name="remove">Remove</string>
+    <string name="create_playlist_title">New Playlist</string>
+    <string name="create_new_playlist">Create a new playlist</string>
+    <string name="create_playlist_subtitle">Give your playlist a name and optional description</string>
+    <string name="playlist_name">Playlist name</string>
+    <string name="playlist_name_placeholder">My awesome playlist</string>
+    <string name="name_cannot_be_empty">Name cannot be empty</string>
+    <string name="add_description">Add a description…</string>
+    <string name="album_art">Album art</string>
+    <string name="favorite">Favorite</string>
+    <string name="no_playlists_create_first">No playlists yet. Create one first!</string>
+    <string name="unknown">Unknown</string>
+    <string name="unknown_artist">Unknown Artist</string>
+    <string name="splash_title">AURA</string>
+    <string name="splash_subtitle">MUSIC</string>
+    <string name="splash_version">v1.0</string>
+    <string name="experience_sound">Experience the sound</string>
+    <string name="more_options">More options</string>
+    <string name="delete_song">Delete</string>
+    <string name="delete_song_confirm">Are you sure you want to delete \"%s\"?</string>
+    <string name="delete_song_warning">This will permanently delete the song file from your device.</string>
+    <string name="statistics" translatable="false">Statistics</string>
+    <string name="total_songs" translatable="false">Total Songs</string>
+    <string name="total_artists" translatable="false">Total Artists</string>
+    <string name="total_albums" translatable="false">Total Albums</string>
+    <string name="total_listening_time" translatable="false">Total Listening Time</string>
+    <string name="top_songs" translatable="false">Top Songs</string>
+    <string name="top_artists" translatable="false">Top Artists</string>
+    <string name="plays_format" translatable="false">%d plays</string>
+    <string name="artist" translatable="false">Artist</string>
+    <string name="album" translatable="false">Album</string>
+    <string name="genre" translatable="false">Genre</string>
+    <string name="folder" translatable="false">Folder</string>
+    <string name="recent_searches">Recent Searches</string>
+    <string name="remove_song_confirm">Are you sure you want to remove \"%s\" from this playlist?</string>
+    <string name="error_delete_song">Failed to delete song file</string>
+    <string name="error_delete_playlist">Failed to delete playlist</string>
+    <string name="error_remove_song">Failed to remove song from playlist</string>
+</resources>

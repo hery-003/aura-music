@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Glow -->
+    <path
+        android:fillColor="#1A8B5CF6"
+        android:pathData="M24,24m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
+    <!-- Minimal music note -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M24,36 C20,36 17,38 17,41 C17,44 20,46 24,46 C28,46 31,44 31,41 L31,14 L40,11 L40,17 L31,20 Z" />
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M31,17 L40,14 L40,15.5 L31,18.5 Z" />
+</vector>

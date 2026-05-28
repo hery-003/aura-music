@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Glow ring -->
+    <path
+        android:fillColor="#8B5CF6"
+        android:fillAlpha="0.08"
+        android:pathData="M54,54m-38,0a38,38 0,1 1,76 0a38,38 0,1 1,-76 0" />
+    <!-- Note head -->
+    <path
+        android:fillColor="#F5F3FF"
+        android:pathData="M32,76 C32,66 52,66 52,76 C52,86 32,86 32,76 Z" />
+    <!-- Stem -->
+    <path
+        android:fillColor="#F5F3FF"
+        android:pathData="M50,70 L50,24 L54,24 L54,70 Z" />
+    <!-- Flag -->
+    <path
+        android:fillColor="#F5F3FF"
+        android:pathData="M52,24 C76,18 80,42 58,46 L56,40 C70,38 68,26 52,32 Z" />
+</vector>

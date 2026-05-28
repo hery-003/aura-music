@@ -1,0 +1,126 @@
+package com.auramusic.widget
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.util.Log
+import android.annotation.SuppressLint
+import android.widget.RemoteViews
+import com.auramusic.player.R
+import com.auramusic.service.MusicPlaybackService
+
+@SuppressLint("UnsafeOptInUsageError")
+class MusicWidgetProvider : AppWidgetProvider() {
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray
+    ) {
+        try {
+            for (appWidgetId in appWidgetIds) {
+                try {
+                    updateWidget(context, appWidgetManager, appWidgetId, null, null, false, -1L)
+                } catch (e: Exception) {
+                    Log.e("MusicWidgetProvider", "Error updating widget $appWidgetId", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MusicWidgetProvider", "Error in onUpdate", e)
+        }
+    }
+
+    companion object {
+        const val ACTION_UPDATE_WIDGET = "com.auramusic.UPDATE_WIDGET"
+
+        fun updateWidget(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+            title: String?,
+            artist: String?,
+            isPlaying: Boolean,
+            albumId: Long = -1L
+        ) {
+            try {
+                val views = RemoteViews(context.packageName, R.layout.app_widget_info)
+
+                views.setTextViewText(
+                    R.id.widget_title,
+                    title ?: context.getString(R.string.app_name)
+                )
+                views.setTextViewText(
+                    R.id.widget_artist,
+                    artist ?: context.getString(R.string.no_songs_found)
+                )
+
+                if (albumId > 0) {
+                    val albumArtUri = ContentUris.withAppendedId(
+                        Uri.parse("content://media/external/audio/albumart"),
+                        albumId
+                    )
+                    views.setImageViewUri(R.id.widget_album_art, albumArtUri)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        views.setInt(R.id.widget_album_art, "setClipToOutline", 1)
+                    }
+                }
+
+                val playIcon = if (isPlaying) {
+                    android.R.drawable.ic_media_pause
+                } else {
+                    android.R.drawable.ic_media_play
+                }
+                views.setImageViewResource(R.id.widget_play_pause, playIcon)
+
+                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_IMMUTABLE
+                } else 0
+
+                try {
+                    val prevIntent = Intent(context, MusicPlaybackService::class.java).apply {
+                        action = MusicPlaybackService.ACTION_PREVIOUS
+                    }
+                    views.setOnClickPendingIntent(
+                        R.id.widget_prev,
+                        PendingIntent.getService(context, 0, prevIntent, flags)
+                    )
+                } catch (e: Exception) {
+                    Log.e("MusicWidgetProvider", "Error creating prev intent", e)
+                }
+
+                try {
+                    val playPauseIntent = Intent(context, MusicPlaybackService::class.java).apply {
+                        action = MusicPlaybackService.ACTION_PLAY_PAUSE
+                    }
+                    views.setOnClickPendingIntent(
+                        R.id.widget_play_pause,
+                        PendingIntent.getService(context, 1, playPauseIntent, flags)
+                    )
+                } catch (e: Exception) {
+                    Log.e("MusicWidgetProvider", "Error creating play/pause intent", e)
+                }
+
+                try {
+                    val nextIntent = Intent(context, MusicPlaybackService::class.java).apply {
+                        action = MusicPlaybackService.ACTION_NEXT
+                    }
+                    views.setOnClickPendingIntent(
+                        R.id.widget_next,
+                        PendingIntent.getService(context, 2, nextIntent, flags)
+                    )
+                } catch (e: Exception) {
+                    Log.e("MusicWidgetProvider", "Error creating next intent", e)
+                }
+
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+            } catch (e: Exception) {
+                Log.e("MusicWidgetProvider", "Error updating widget", e)
+            }
+        }
+    }
+}

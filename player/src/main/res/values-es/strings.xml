@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_name">Reproducción de música</string>
+    <string name="notification_channel_desc">Controla la reproducción de música</string>
+    <string name="app_widget_name">Aura Music</string>
+    <string name="app_name">Aura Music</string>
+    <string name="no_songs_found">No se encontraron canciones</string>
+    <string name="notification_title">Aura Music</string>
+    <string name="no_music_playing">Sin música reproduciéndose</string>
+    <string name="play_action">Reproducir</string>
+    <string name="pause_action">Pausa</string>
+    <string name="previous_action">Anterior</string>
+    <string name="next_action">Siguiente</string>
+    <string name="close_action">Cerrar</string>
+    <string name="widget_description">Controles de Aura Music</string>
+</resources>
