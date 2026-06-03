@@ -171,7 +171,7 @@ private fun LibraryTabChip(icon: ImageVector, label: String, selected: Boolean, 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Icon(icon, label, tint = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(label, color = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
         }
@@ -181,7 +181,7 @@ private fun LibraryTabChip(icon: ImageVector, label: String, selected: Boolean, 
 @Composable
 private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavorite: (Song) -> Unit, onNavigateToNowPlaying: (Long) -> Unit, onSongMoreOptions: (Song) -> Unit = {}, onDeleteSong: (Song) -> Unit = {}, currentSongId: Long? = null) {
     if (songs.isEmpty()) {
-        EmptyState(icon = { Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_songs_found), subtitle = stringResource(R.string.empty_library))
+        EmptyState(icon = { Icon(Icons.Rounded.MusicNote, stringResource(R.string.cd_no_songs), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_songs_found), subtitle = stringResource(R.string.empty_library))
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(songs, key = { it.id }) { song ->
@@ -194,7 +194,7 @@ private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavo
 @Composable
 private fun ArtistsTab(artists: List<String>, songs: List<Song>, onArtistClick: (String) -> Unit = {}) {
     if (artists.isEmpty()) {
-        EmptyState(icon = { Icon(Icons.Rounded.Person, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_artists_found), subtitle = stringResource(R.string.empty_library))
+        EmptyState(icon = { Icon(Icons.Rounded.Person, stringResource(R.string.cd_no_artists), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_artists_found), subtitle = stringResource(R.string.empty_library))
     } else {
         val songCountByArtist = remember(songs) {
             songs.groupingBy { it.artist }.eachCount()
@@ -203,7 +203,7 @@ private fun ArtistsTab(artists: List<String>, songs: List<Song>, onArtistClick: 
             items(artists, key = { it }) { artist ->
                 val count = songCountByArtist[artist] ?: 0
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp).clickable { onArtistClick(artist) }, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Person, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Rounded.Person, stringResource(R.string.cd_artist), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium)
@@ -220,7 +220,7 @@ private fun ArtistsTab(artists: List<String>, songs: List<Song>, onArtistClick: 
 private fun AlbumsTab(albums: List<Album>, onAlbumClick: (Long) -> Unit = {}) {
     if (albums.isEmpty()) {
         EmptyState(
-            icon = { Icon(Icons.Rounded.Album, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
+            icon = { Icon(Icons.Rounded.Album, contentDescription = stringResource(R.string.cd_no_albums), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
             title = stringResource(R.string.no_albums_found),
             subtitle = stringResource(R.string.empty_library)
         )
@@ -243,7 +243,7 @@ private fun AlbumGridItem(album: Album, onClick: () -> Unit = {}) {
                 modifier = Modifier.fillMaxSize(),
                 fallback = {
                     Box(Modifier.fillMaxSize().background(brush = Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Album, null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), modifier = Modifier.size(48.dp))
+                        Icon(Icons.Rounded.Album, stringResource(R.string.cd_album_art), tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), modifier = Modifier.size(48.dp))
                     }
                 }
             )
@@ -258,7 +258,7 @@ private fun AlbumGridItem(album: Album, onClick: () -> Unit = {}) {
 private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit, onImportPlaylist: () -> Unit = {}, onNavigateToPlaylist: (Long) -> Unit) {
     if (playlists.isEmpty()) {
         Column(Modifier.fillMaxSize().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
+            Icon(Icons.Rounded.MusicNote, stringResource(R.string.cd_no_playlists), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.no_playlists_yet), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
@@ -266,12 +266,12 @@ private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onCreatePlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Icon(Icons.Rounded.Add, null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.Add, stringResource(R.string.cd_create_playlist), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.create_playlist), fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(onClick = onImportPlaylist, shape = RoundedCornerShape(12.dp)) {
-                    Icon(Icons.Rounded.FileOpen, null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.FileOpen, stringResource(R.string.cd_import_playlist), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.import_playlist), fontWeight = FontWeight.SemiBold)
                 }
@@ -281,13 +281,13 @@ private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
                 FilledTonalButton(onClick = onImportPlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)), modifier = Modifier.height(36.dp)) {
-                    Icon(Icons.Rounded.FileOpen, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.FileOpen, stringResource(R.string.cd_import_playlist), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.import_playlist), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                 }
                 Spacer(Modifier.width(8.dp))
                 FilledTonalButton(onClick = onCreatePlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))) {
-                    Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Add, stringResource(R.string.cd_new_playlist), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.new_playlist), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 }
@@ -305,7 +305,7 @@ private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit
 private fun PlaylistGridItem(playlist: Playlist, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable { onClick() }) {
         Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(brush = Brush.linearGradient(listOf(Color(playlist.color), Color(playlist.color).copy(alpha = 0.5f)))), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), modifier = Modifier.size(48.dp))
+            Icon(Icons.Rounded.MusicNote, stringResource(R.string.cd_playlist), tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), modifier = Modifier.size(48.dp))
         }
         Spacer(Modifier.height(8.dp))
         Text(playlist.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -317,7 +317,7 @@ private fun PlaylistGridItem(playlist: Playlist, onClick: () -> Unit) {
 private fun GenresTab(genres: List<String>, onGenreClick: (String) -> Unit = {}) {
     if (genres.isEmpty()) {
         EmptyState(
-            icon = { Icon(Icons.Rounded.Category, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
+            icon = { Icon(Icons.Rounded.Category, contentDescription = stringResource(R.string.cd_no_genres), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
             title = stringResource(R.string.no_genres_found),
             subtitle = stringResource(R.string.no_genre_tags)
         )
@@ -325,7 +325,7 @@ private fun GenresTab(genres: List<String>, onGenreClick: (String) -> Unit = {})
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(genres, key = { it }) { genre ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp).clickable { onGenreClick(genre) }, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Category, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Rounded.Category, stringResource(R.string.cd_genre), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(genre, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium)
                 }
@@ -339,7 +339,7 @@ private fun GenresTab(genres: List<String>, onGenreClick: (String) -> Unit = {})
 private fun FoldersTab(folders: List<String>, onFolderClick: (String) -> Unit = {}) {
     if (folders.isEmpty()) {
         EmptyState(
-            icon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
+            icon = { Icon(Icons.Rounded.FolderOpen, contentDescription = stringResource(R.string.cd_no_folders), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) },
             title = stringResource(R.string.no_folders_found),
             subtitle = stringResource(R.string.folders_description)
         )
@@ -347,7 +347,7 @@ private fun FoldersTab(folders: List<String>, onFolderClick: (String) -> Unit = 
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(folders, key = { it }) { folder ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp).clickable { onFolderClick(folder) }, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Folder, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Rounded.Folder, stringResource(R.string.cd_folder), tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(16.dp))
                     val file = File(folder)
                     Text(file.name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium)

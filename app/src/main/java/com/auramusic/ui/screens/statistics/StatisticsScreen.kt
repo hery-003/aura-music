@@ -219,7 +219,7 @@ fun StatisticsScreen(
                         )
                         Icon(
                             imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.cd_artist),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -265,7 +265,7 @@ fun StatisticsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Favorite,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.cd_favorite_song),
                             tint = Color(0xFFFF6B6B),
                             modifier = Modifier.size(20.dp)
                         )
@@ -320,7 +320,7 @@ fun StatisticsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.FavoriteBorder,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.cd_favorite_artist),
                             tint = Color(0xFFFF6B6B),
                             modifier = Modifier.size(20.dp)
                         )
@@ -366,7 +366,7 @@ fun StatisticsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.History,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.cd_listening_history),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -431,7 +431,7 @@ private fun StatCard(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = label,
                     tint = color,
                     modifier = Modifier.size(22.dp)
                 )

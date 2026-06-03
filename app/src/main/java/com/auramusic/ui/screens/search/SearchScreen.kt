@@ -173,7 +173,7 @@ private fun RecentSearches(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.History,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.cd_recent_search),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -268,7 +268,7 @@ private fun EmptySearchState() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 imageVector = Icons.Rounded.Search,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_search_music),
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                 modifier = Modifier.size(80.dp)
             )
@@ -298,7 +298,7 @@ private fun NoResultsState() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 imageVector = Icons.Rounded.SearchOff,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_no_results),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(72.dp)
             )
@@ -389,7 +389,7 @@ private fun SearchResults(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Person,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_artist),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -425,7 +425,7 @@ private fun SearchResults(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Album,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_album),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -468,7 +468,7 @@ private fun SearchResults(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_playlist),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -506,7 +506,7 @@ private fun SearchResults(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Folder,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_folder),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
