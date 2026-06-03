@@ -19,7 +19,7 @@ enum class AuraMode {
 
 class AuraColorManager {
 
-    private val _dominantColor = MutableStateFlow(Color(0xFF8B5CF6))
+    private val _dominantColor = MutableStateFlow(Color(0xFF, 0x8B, 0x5C, 0xF6))
     val dominantColor: StateFlow<Color> = _dominantColor.asStateFlow()
 
     private val _auraMode = MutableStateFlow(AuraMode.DEFAULT)
@@ -33,10 +33,15 @@ class AuraColorManager {
         withContext(Dispatchers.Default) {
             runCatching {
                 val palette = Palette.from(bitmap).generate()
-                val rgb = palette.getDominantColor(android.graphics.Color.rgb(139, 92, 246))
-                if (rgb != 0) {
-                    _dominantColor.value = Color(rgb)
-                    Log.d("AuraColorManager", "Extracted dominant color: $rgb")
+                val argb = palette.getDominantColor(android.graphics.Color.rgb(139, 92, 246))
+                if (argb != 0) {
+                    _dominantColor.value = Color(
+                        red = (argb shr 16) and 0xFF,
+                        green = (argb shr 8) and 0xFF,
+                        blue = argb and 0xFF,
+                        alpha = 0xFF
+                    )
+                    Log.d("AuraColorManager", "Extracted dominant color: $argb")
                 }
             }.onFailure { e ->
                 Log.e("AuraColorManager", "Error extracting colors from bitmap", e)
@@ -86,7 +91,7 @@ class AuraColorManager {
     }
 
     fun reset() {
-        _dominantColor.value = Color(0xFF8B5CF6)
+        _dominantColor.value = Color(0xFF, 0x8B, 0x5C, 0xF6)
         _auraMode.value = AuraMode.DEFAULT
     }
 }

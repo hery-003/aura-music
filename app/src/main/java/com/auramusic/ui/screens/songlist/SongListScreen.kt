@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +35,7 @@ fun SongListScreen(
     onBack: () -> Unit,
     onPlayAll: () -> Unit = {},
     onShufflePlay: () -> Unit = {},
+    currentSongId: Long? = null,
     animationsEnabled: Boolean = true
 ) {
     Scaffold(
@@ -72,7 +74,7 @@ fun SongListScreen(
                             Icon(Icons.Rounded.Shuffle, stringResource(R.string.shuffle_play), tint = MaterialTheme.colorScheme.primary)
                         }
                         IconButton(onClick = onPlayAll) {
-                            Icon(Icons.Rounded.PlaylistPlay, stringResource(R.string.play_all), tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.play_all), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 },
@@ -108,7 +110,8 @@ fun SongListScreen(
                             onClick = { onPlaySong(song) },
                             onFavoriteToggle = { onToggleFavorite(song) },
                             onAddToPlaylist = { onSongMoreOptions(song.id) },
-                            onDeleteSong = { onDeleteSong(song) }
+                            onDeleteSong = { onDeleteSong(song) },
+                            isCurrentlyPlaying = song.id == currentSongId
                         )
                     }
                 }

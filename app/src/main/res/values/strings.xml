@@ -50,12 +50,18 @@
     <string name="theme">Theme</string>
     <string name="crossfade">Crossfade</string>
     <string name="audio">Audio</string>
+    <string name="permissions">Permissions</string>
+    <string name="permission_audio_granted">Audio permission granted</string>
+    <string name="permission_audio_denied">Audio permission denied</string>
+    <string name="open_app_settings">Open App Settings</string>
     <string name="storage">Storage</string>
     <string name="gamer_mode">Gamer Mode</string>
     <string name="amoled">AMOLED</string>
     <string name="neon">Neon</string>
     <string name="dynamic">Dynamic</string>
     <string name="monet">Monet</string>
+    <string name="light">Light</string>
+    <string name="light_theme">Light</string>
     <string name="normal">Normal</string>
     <string name="bass_boost">Bass Boost</string>
     <string name="rock">Rock</string>
@@ -64,6 +70,7 @@
     <string name="classical">Classical</string>
     <string name="gamer">Gamer</string>
     <string name="custom">Custom</string>
+    <string name="clarity">Clarity</string>
     <string name="no_eq_bands">No equalizer bands available</string>
     <string name="custom_band_levels">Custom Band Levels</string>
     <string name="crossfade_songs">Crossfade Songs</string>
@@ -127,21 +134,64 @@
     <string name="delete_song">Delete</string>
     <string name="delete_song_confirm">Are you sure you want to delete \"%s\"?</string>
     <string name="delete_song_warning">This will permanently delete the song file from your device.</string>
-    <string name="statistics" translatable="false">Statistics</string>
-    <string name="total_songs" translatable="false">Total Songs</string>
-    <string name="total_artists" translatable="false">Total Artists</string>
-    <string name="total_albums" translatable="false">Total Albums</string>
-    <string name="total_listening_time" translatable="false">Total Listening Time</string>
-    <string name="top_songs" translatable="false">Top Songs</string>
-    <string name="top_artists" translatable="false">Top Artists</string>
-    <string name="plays_format" translatable="false">%d plays</string>
-    <string name="artist" translatable="false">Artist</string>
-    <string name="album" translatable="false">Album</string>
-    <string name="genre" translatable="false">Genre</string>
-    <string name="folder" translatable="false">Folder</string>
+    <string name="statistics">Statistics</string>
+    <string name="listening_history">Listening History</string>
+    <string name="total_songs">Total Songs</string>
+    <string name="total_artists">Total Artists</string>
+    <string name="total_albums">Total Albums</string>
+    <string name="total_listening_time">Total Listening Time</string>
+    <string name="top_songs">Top Songs</string>
+    <string name="top_artists">Top Artists</string>
+    <string name="plays_format">%d plays</string>
+    <string name="favorite_songs">Favorite Songs</string>
+    <string name="favorite_artists">Favorite Artists</string>
+    <string name="artist">Artist</string>
+    <string name="album">Album</string>
+    <string name="genre">Genre</string>
+    <string name="folder">Folder</string>
     <string name="recent_searches">Recent Searches</string>
     <string name="remove_song_confirm">Are you sure you want to remove \"%s\" from this playlist?</string>
     <string name="error_delete_song">Failed to delete song file</string>
     <string name="error_delete_playlist">Failed to delete playlist</string>
     <string name="error_remove_song">Failed to remove song from playlist</string>
+    <string name="notification_channel_name">Music Playback</string>
+    <string name="notification_channel_desc">Controls for music playback</string>
+    <string name="notification_title">Aura Music</string>
+    <string name="no_music_playing">No music playing</string>
+    <string name="previous_action">Previous</string>
+    <string name="play_action">Play</string>
+    <string name="pause_action">Pause</string>
+    <string name="next_action">Next</string>
+    <string name="close_action">Close</string>
+    <string name="onboarding_welcome_title">Welcome to Aura Music</string>
+    <string name="onboarding_welcome_subtitle">A premium offline music experience with stunning visuals and powerful controls</string>
+    <string name="onboarding_smart_title">Smart Aura System</string>
+    <string name="onboarding_smart_subtitle">Your music colors the UI. Dynamic glow effects respond to album art, genre, and rhythm</string>
+    <string name="onboarding_control_title">Total Control</string>
+    <string name="onboarding_control_subtitle">Equalizer with 9 presets, gapless playback, sleep timer, crossfade, and real-time visualizer</string>
+    <string name="onboarding_ready_title">Ready to Go</string>
+    <string name="onboarding_ready_subtitle">Your music is scanned and organized. Just tap play and let the aura flow</string>
+    <string name="get_started">Get Started</string>
+    <string name="skip">Skip</string>
+    <string name="no_listening_history">No listening history yet</string>
+    <string name="no_lyrics_available">No lyrics available</string>
+    <string name="export_playlist">Export Playlist</string>
+    <string name="import_playlist">Import Playlist</string>
+    <string name="error_import_playlist">Failed to import playlist</string>
+    <string name="playlist_imported">Playlist imported successfully</string>
+    <string name="playback_speed">Playback Speed</string>
+    <string name="night_vibes">Night vibes</string>
+    <string name="good_morning">Good morning</string>
+    <string name="good_afternoon">Good afternoon</string>
+    <string name="good_evening">Good evening</string>
+    <string name="welcome_back">Welcome back</string>
+    <string name="discover_your_music">Discover your music</string>
+    <string name="error_export_playlist">Failed to export playlist</string>
+    <string name="time_minutes">%d min</string>
+    <string name="time_hours">%dh</string>
+    <string name="time_hours_minutes">%dh %dmin</string>
+    <plurals name="song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
 </resources>

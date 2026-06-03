@@ -3,6 +3,7 @@ package com.auramusic.util
 import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -23,7 +24,7 @@ fun Context.getAlbumArtBitmap(albumId: Long, size: Int = 512): Bitmap? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             contentResolver.loadThumbnail(uri, Size(size, size), null)
         } else {
-            MediaStore.Images.Media.getBitmap(contentResolver, uri)
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
         }
     } catch (e: Exception) {
         null
@@ -31,7 +32,8 @@ fun Context.getAlbumArtBitmap(albumId: Long, size: Int = 512): Bitmap? {
 }
 
 fun Long.formatDuration(): String {
-    val totalSeconds = this / 1000
+    val ms = if (this < 0L) 0L else this
+    val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)

@@ -17,6 +17,7 @@ data class SongEntity(
     val duration: Long = 0,
     val path: String = "",
     val size: Long = 0,
+    val bitrate: Int = 0,
     @ColumnInfo(name = "date_added")
     val dateAdded: Long = 0,
     @ColumnInfo(name = "date_modified")

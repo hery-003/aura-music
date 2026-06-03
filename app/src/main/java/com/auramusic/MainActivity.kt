@@ -4,9 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import timber.log.Timber
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,19 +46,25 @@ class MainActivity : ComponentActivity() {
         }
         val audioGranted = permissions[audioPermission] ?: false
         _hasAudioPermission = audioGranted
-        Log.d("MainActivity", "Permiso audio concedido: $audioGranted")
+        Timber.d("Permiso audio concedido: $audioGranted")
 
         if (audioGranted) {
-            Log.d("MainActivity", "Permiso audio concedido - scan handled by splash screen")
+            Timber.d("Permiso audio concedido - scan handled by splash screen")
         } else {
             val deniedPermissions = permissions.filter { !it.value }.keys
-            Log.w("MainActivity", "Permisos denegados: $deniedPermissions")
+            Timber.w("Permisos denegados: $deniedPermissions")
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
 
         _hasAudioPermission = checkAudioPermissions()
         
@@ -99,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 ) == PackageManager.PERMISSION_GRANTED
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error checking permissions", e)
+            Timber.e(e, "Error checking permissions")
             false
         }
     }
@@ -127,7 +134,7 @@ class MainActivity : ComponentActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
-                        Log.i("MainActivity", "RECORD_AUDIO needed for audio visualizer (FFT) - showing rationale")
+                        Timber.i("RECORD_AUDIO needed for audio visualizer (FFT) - showing rationale")
                     }
                     permissions.add(Manifest.permission.RECORD_AUDIO)
                 }
@@ -135,20 +142,20 @@ class MainActivity : ComponentActivity() {
 
             if (permissions.isNotEmpty()) {
                 permissionRequestInProgress = true
-                Log.d("MainActivity", "Solicitando permisos: $permissions")
+                Timber.d("Solicitando permisos: $permissions")
                 try {
                     requestPermissionLauncher.launch(permissions.toTypedArray())
                 } catch (e: Exception) {
                     permissionRequestInProgress = false
-                    Log.e("MainActivity", "Error lanzando solicitud de permisos", e)
+                    Timber.e(e, "Error lanzando solicitud de permisos")
                 }
             } else {
                 _hasAudioPermission = true
-                Log.d("MainActivity", "Permisos ya concedidos")
+                Timber.d("Permisos ya concedidos")
             }
         } catch (e: Exception) {
             permissionRequestInProgress = false
-            Log.e("MainActivity", "Error requesting permissions", e)
+            Timber.e(e, "Error requesting permissions")
         }
     }
 }

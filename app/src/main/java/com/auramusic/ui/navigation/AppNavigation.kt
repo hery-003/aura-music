@@ -2,11 +2,21 @@ package com.auramusic.ui.navigation
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +40,8 @@ import com.auramusic.ui.screens.library.LibraryScreen
 import com.auramusic.ui.screens.nowplaying.NowPlayingScreen
 import com.auramusic.ui.screens.playlist.CreatePlaylistScreen
 import com.auramusic.ui.screens.playlist.PlaylistDetailScreen
+import com.auramusic.ui.screens.history.HistoryScreen
+import com.auramusic.ui.screens.onboarding.OnboardingScreen
 import com.auramusic.ui.screens.search.SearchScreen
 import com.auramusic.ui.screens.settings.SettingsScreen
 import com.auramusic.ui.screens.statistics.StatisticsScreen
@@ -53,7 +65,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.content.ContentUris
 import android.net.Uri
-import android.util.Log
+import timber.log.Timber
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -86,7 +98,7 @@ fun AppNavigation(
 
     val bottomNavItems = listOf(
         BottomNavItem({ Text(stringResource(R.string.home)) }, { Icon(Icons.Rounded.Home, stringResource(R.string.home)) }, Routes.Home.route),
-        BottomNavItem({ Text(stringResource(R.string.library)) }, { Icon(Icons.Rounded.LibraryMusic, stringResource(R.string.library)) }, Routes.Library.route),
+        BottomNavItem({ Text(stringResource(R.string.library)) }, { Icon(Icons.Rounded.MusicNote, stringResource(R.string.library)) }, Routes.Library.route),
         BottomNavItem({ Text(stringResource(R.string.search)) }, { Icon(Icons.Rounded.Search, stringResource(R.string.search)) }, Routes.Search.route),
         BottomNavItem({ Text(stringResource(R.string.settings)) }, { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }, Routes.Settings.route),
     )
@@ -118,6 +130,7 @@ fun AppNavigation(
     val accentColor by prefs.accentColor.collectAsStateWithLifecycle(initialValue = 0xFF8B5CF6L)
     val audioQuality by prefs.audioQuality.collectAsStateWithLifecycle(initialValue = AppPreferences.AUDIO_QUALITY_NORMAL)
     val animationsEnabled by prefs.animationsEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val playbackSpeed by prefs.playbackSpeed.collectAsStateWithLifecycle(initialValue = 1f)
 
     val sleepTimerActive by musicPlayer.sleepTimerManager.isActive
         .collectAsStateWithLifecycle()
@@ -131,7 +144,16 @@ fun AppNavigation(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val importPlaylistLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            sharedViewModel.importPlaylist(uri)
+        }
+    }
     var songToDelete by remember { mutableStateOf<Song?>(null) }
+    var pendingDeleteSongId by remember { mutableStateOf<Long?>(null) }
     var showQueueSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -149,10 +171,11 @@ fun AppNavigation(
     val deleteLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            songToDelete?.let { sharedViewModel.deleteSongFromDb(it.id) }
+        val id = pendingDeleteSongId
+        pendingDeleteSongId = null
+        if (result.resultCode == Activity.RESULT_OK && id != null) {
+            sharedViewModel.deleteSongFromDb(id)
         }
-        songToDelete = null
     }
 
     if (songToDelete != null) {
@@ -186,6 +209,7 @@ fun AppNavigation(
                     songToDelete = null
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         try {
+                            pendingDeleteSongId = s.id
                             val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
                             val uri = ContentUris.withAppendedId(collection, s.id)
                             val pendingIntent = MediaStore.createDeleteRequest(
@@ -196,7 +220,8 @@ fun AppNavigation(
                                 IntentSenderRequest.Builder(pendingIntent).build()
                             )
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Timber.e(e, "Failed to create delete request")
+                            pendingDeleteSongId = null
                             sharedViewModel.deleteSong(s)
                         }
                     } else {
@@ -229,18 +254,19 @@ fun AppNavigation(
                                     navController.navigate(Routes.NowPlaying.createRoute(it.id)) {
                                         launchSingleTop = true
                                     }
-                                } catch (e: Exception) { e.printStackTrace() }
+                                } catch (e: Exception) { Timber.e(e, "Navigation failed") }
                             }
-                        }
+                        },
+                        gamerMode = gamerMode
                     )
-                    val navItemColor = if (gamerMode) {
-                        val hue = rememberInfiniteTransition(label = "nav_bar").animateFloat(
-                            initialValue = 0f, targetValue = 360f,
-                            animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart),
-                            label = "nav_hue"
-                        )
-                        Color.hsl(hue.value, 1f, 0.6f)
-                    } else MaterialTheme.colorScheme.primary
+                    val infiniteTransition = rememberInfiniteTransition(label = "nav_bar")
+                    val hue by infiniteTransition.animateFloat(
+                        initialValue = 0f, targetValue = 360f,
+                        animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart),
+                        label = "nav_hue"
+                    )
+                    val navItemColor = if (gamerMode) Color.hsl(hue % 360f, 1f, 0.6f)
+                    else MaterialTheme.colorScheme.primary
 
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
@@ -260,7 +286,7 @@ fun AppNavigation(
                                             launchSingleTop = true
                                             restoreState = true
                                         }
-                                    } catch (e: Exception) { e.printStackTrace() }
+                                    } catch (e: Exception) { Timber.e(e, "Navigation failed") }
                                 },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = navItemColor,
@@ -289,17 +315,36 @@ fun AppNavigation(
             )
         }
 
-        NavHost(
-            navController = navController,
-            startDestination = Routes.Splash.route,
-            modifier = Modifier.padding(padding),
-            enterTransition = {
-                if (animationsEnabled) fadeIn(animationSpec = tween(300)) else fadeIn(animationSpec = tween(0))
-            },
-            exitTransition = {
-                if (animationsEnabled) fadeOut(animationSpec = tween(300)) else fadeOut(animationSpec = tween(0))
-            }
-        ) {
+        SharedTransitionLayout(modifier = Modifier.padding(padding)) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.Splash.route,
+                modifier = Modifier,
+                enterTransition = {
+                    if (animationsEnabled)
+                        fadeIn(animationSpec = tween(200)) + scaleIn(initialScale = 0.98f, animationSpec = tween(250))
+                    else
+                        fadeIn(animationSpec = tween(0))
+                },
+                exitTransition = {
+                    if (animationsEnabled)
+                        fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.98f, animationSpec = tween(250))
+                    else
+                        fadeOut(animationSpec = tween(0))
+                },
+                popEnterTransition = {
+                    if (animationsEnabled)
+                        slideInHorizontally(animationSpec = tween(300)) { -it / 3 } + fadeIn(animationSpec = tween(200))
+                    else
+                        fadeIn(animationSpec = tween(0))
+                },
+                popExitTransition = {
+                    if (animationsEnabled)
+                        slideOutHorizontally(animationSpec = tween(300)) { it / 2 } + fadeOut(animationSpec = tween(200))
+                    else
+                        fadeOut(animationSpec = tween(0))
+                }
+            ) {
             composable(Routes.Splash.route) {
                 val splashContext = LocalContext.current
                 var hasPermissionChecked by remember { mutableStateOf(false) }
@@ -316,11 +361,11 @@ fun AppNavigation(
                             try {
                                 ContextCompat.checkSelfPermission(splashContext, permission) == PackageManager.PERMISSION_GRANTED
                             } catch (e: Exception) {
-                                Log.e("AppNavigation", "Error checking permission", e)
+                                Timber.e(e, "Error checking permission")
                                 false
                             }
                         } catch (e: Exception) {
-                            Log.e("AppNavigation", "Error in splash", e)
+                            Timber.e(e, "Error in splash")
                             false
                         }
                     }
@@ -330,21 +375,25 @@ fun AppNavigation(
                         try {
                             sharedViewModel.scanMusic()
                         } catch (e: Exception) {
-                            Log.e("AppNavigation", "Error scanning music", e)
+                            Timber.e(e, "Error scanning music")
                         }
                     }
                 }
+
+                val onboardingShown by prefs.onboardingShown
+                    .collectAsStateWithLifecycle(initialValue = true)
 
                 SplashScreen(
                     onSplashFinished = {
                         try {
                             if (navController.currentDestination?.route == Routes.Splash.route) {
-                                navController.navigate(Routes.Home.route) {
+                                val dest = if (!onboardingShown) Routes.Onboarding.route else Routes.Home.route
+                                navController.navigate(dest) {
                                     popUpTo(Routes.Splash.route) { inclusive = true }
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e("AppNavigation", "Navigation error", e)
+                            Timber.e(e, "Navigation error")
                         }
                     },
                     waitForPermissions = hasPermissionChecked,
@@ -360,12 +409,12 @@ fun AppNavigation(
                     onNavigateToNowPlaying = { songId ->
                         try {
                             navController.navigate(Routes.NowPlaying.createRoute(songId))
-                        } catch (e: Exception) { e.printStackTrace() }
+                        } catch (e: Exception) { Timber.e(e, "Navigation failed") }
                     },
                     onNavigateToPlaylist = { playlistId ->
                         try {
                             navController.navigate(Routes.PlaylistDetail.createRoute(playlistId))
-                        } catch (e: Exception) { e.printStackTrace() }
+                        } catch (e: Exception) { Timber.e(e, "Navigation failed") }
                     },
                     onNavigateToAlbum = { albumId ->
                         navController.navigate(Routes.AlbumSongs.createRoute(albumId))
@@ -381,7 +430,8 @@ fun AppNavigation(
                     albums = albums,
                     isScanning = isScanning,
                     onScan = { sharedViewModel.scanMusic() },
-                    onCreatePlaylist = { navController.navigate(Routes.CreatePlaylist.route) }
+                    onCreatePlaylist = { navController.navigate(Routes.CreatePlaylist.route) },
+                    currentSongId = currentSong?.id
                 )
             }
 
@@ -400,6 +450,7 @@ fun AppNavigation(
                     onNavigateToPlaylist = { navController.navigate(Routes.PlaylistDetail.createRoute(it)) },
                     onNavigateToNowPlaying = { navController.navigate(Routes.NowPlaying.createRoute(it)) },
                     onCreatePlaylist = { navController.navigate(Routes.CreatePlaylist.route) },
+                    onImportPlaylist = { importPlaylistLauncher.launch(arrayOf("application/json")) },
                     onArtistClick = { artistName ->
                         navController.navigate(Routes.ArtistSongs.createRoute(artistName))
                     },
@@ -411,7 +462,8 @@ fun AppNavigation(
                     },
                     onFolderClick = { folderPath ->
                         navController.navigate(Routes.FolderSongs.createRoute(folderPath))
-                    }
+                    },
+                    currentSongId = currentSong?.id
                 )
             }
 
@@ -432,6 +484,8 @@ fun AppNavigation(
                         else allAlbums.filter { it.title.contains(query, ignoreCase = true) }
                     },
                     onPlaySong = { sharedViewModel.playSong(it) },
+                    onPlayNext = { sharedViewModel.playSongNext(it) },
+                    onAddToQueue = { sharedViewModel.addToQueue(it) },
                     onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
                     onBack = { safePopBackStack() },
                     onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it.id) },
@@ -448,11 +502,13 @@ fun AppNavigation(
                     },
                     searchHistory = searchHistory,
                     onClearSearchHistory = { sharedViewModel.clearSearchHistory() },
+                    currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
 
             composable(Routes.Settings.route) {
+                var previousPreset by rememberSaveable { mutableIntStateOf(EqualizerManager.PRESET_NORMAL) }
                 SettingsScreen(
                     themeMode = themeMode,
                     equalizerPreset = equalizerPreset,
@@ -488,28 +544,80 @@ fun AppNavigation(
                     onGamerModeChange = { enabled ->
                         scope.launch { sharedViewModel.preferences.setGamerMode(enabled) }
                         if (enabled) {
+                            previousPreset = equalizerPreset
                             sharedViewModel.setEqualizerPreset(EqualizerManager.PRESET_GAMER)
+                        } else {
+                            sharedViewModel.setEqualizerPreset(previousPreset)
                         }
                     },
                     onAudioQualityChange = { sharedViewModel.setAudioQuality(it) },
                     onAnimationsEnabledChange = { sharedViewModel.setAnimationsEnabled(it) },
+                    playbackSpeed = playbackSpeed,
+                    onPlaybackSpeedChange = { musicPlayer.setPlaybackSpeed(it) },
                     onRescan = { sharedViewModel.scanMusic() },
                     onBack = { safePopBackStack() },
                     onStatistics = { navController.navigate(Routes.Statistics.route) },
+                    onHistory = { navController.navigate(Routes.History.route) },
                     onSleepTimerStart = { sharedViewModel.startSleepTimer(it) },
                     onSleepTimerStop = { sharedViewModel.stopSleepTimer() }
                 )
             }
 
+            composable(Routes.Onboarding.route) {
+                OnboardingScreen(
+                    onComplete = {
+                        scope.launch { prefs.setOnboardingShown() }
+                        navController.navigate(Routes.Home.route) {
+                            popUpTo(Routes.Onboarding.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(Routes.History.route) {
+                HistoryScreen(
+                    recentlyPlayed = recentlyPlayed,
+                    onSongClick = { sharedViewModel.playSong(it) },
+                    onBack = { safePopBackStack() },
+                    currentSongId = currentSong?.id
+                )
+            }
+
             composable(
                 route = Routes.NowPlaying.route,
-                arguments = listOf(navArgument("songId") { type = NavType.LongType })
+                arguments = listOf(navArgument("songId") { type = NavType.LongType }),
+                enterTransition = {
+                    if (animationsEnabled)
+                        slideInVertically(animationSpec = tween(400)) { it } + fadeIn(animationSpec = tween(250))
+                    else
+                        fadeIn(animationSpec = tween(0))
+                },
+                exitTransition = {
+                    if (animationsEnabled)
+                        slideOutVertically(animationSpec = tween(350)) { it } + fadeOut(animationSpec = tween(200))
+                    else
+                        fadeOut(animationSpec = tween(0))
+                },
+                popEnterTransition = {
+                    if (animationsEnabled)
+                        fadeIn(animationSpec = tween(200))
+                    else
+                        fadeIn(animationSpec = tween(0))
+                },
+                popExitTransition = {
+                    if (animationsEnabled)
+                        slideOutVertically(animationSpec = tween(350)) { it } + fadeOut(animationSpec = tween(200))
+                    else
+                        fadeOut(animationSpec = tween(0))
+                }
             ) { _ ->
                 val currentPosition by musicPlayer.currentPosition.collectAsStateWithLifecycle()
                 val duration by musicPlayer.duration.collectAsStateWithLifecycle()
                 val shuffleMode by musicPlayer.shuffleMode.collectAsStateWithLifecycle()
                 val repeatMode by musicPlayer.repeatMode.collectAsStateWithLifecycle()
 
+                val playbackSpeed by musicPlayer.playbackSpeed
+                    .collectAsStateWithLifecycle()
                 val dominantColor by musicPlayer.colorManager.dominantColor
                     .collectAsStateWithLifecycle()
                 val auraMode by musicPlayer.colorManager.auraMode
@@ -517,6 +625,10 @@ fun AppNavigation(
                 val fftMagnitudes by musicPlayer.fftVisualizer.fftMagnitudes
                     .collectAsStateWithLifecycle()
                 val waveform by musicPlayer.fftVisualizer.waveform
+                    .collectAsStateWithLifecycle()
+                val beat by musicPlayer.fftVisualizer.beat
+                    .collectAsStateWithLifecycle()
+                val lyricData by musicPlayer.lyricData
                     .collectAsStateWithLifecycle()
 
                 NowPlayingScreen(
@@ -526,6 +638,7 @@ fun AppNavigation(
                     duration = duration,
                     shuffleMode = shuffleMode,
                     repeatMode = repeatMode,
+                    playbackSpeed = playbackSpeed,
                     onPlayPause = { musicPlayer.togglePlayPause() },
                     onNext = { musicPlayer.playNext() },
                     onPrevious = { musicPlayer.playPrevious() },
@@ -537,6 +650,7 @@ fun AppNavigation(
                     },
                     onBack = { safePopBackStack() },
                     onQueue = { showQueueSheet = true },
+                    onSpeedChange = { musicPlayer.setPlaybackSpeed(it) },
                     sleepTimerActive = sleepTimerActive,
                     sleepTimerWarning = sleepTimerWarning,
                     onSleepTimerClick = {
@@ -551,7 +665,10 @@ fun AppNavigation(
                     auraMode = auraMode,
                     fftMagnitudes = fftMagnitudes,
                     waveform = waveform,
-                    animationsEnabled = animationsEnabled
+                    beat = beat,
+                    animationsEnabled = animationsEnabled,
+                    showVisualizer = showVisualizer,
+                    lyricData = lyricData
                 )
             }
 
@@ -559,7 +676,7 @@ fun AppNavigation(
                 route = Routes.PlaylistDetail.route,
                 arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
             ) { backStackEntry ->
-                val playlistId = backStackEntry.arguments!!.getLong("playlistId")
+                val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: return@composable
                 val playlist = playlists.find { it.id == playlistId }
                 val playlistSongs by sharedViewModel.repository.getPlaylistSongs(playlistId)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -598,7 +715,11 @@ fun AppNavigation(
                     },
                     onEditPlaylist = { _, name, desc ->
                         sharedViewModel.updatePlaylistName(playlistId, name, desc)
-                    }
+                    },
+                    onExportPlaylist = {
+                        sharedViewModel.exportPlaylist(context, playlistId)
+                    },
+                    currentSongId = currentSong?.id
                 )
             }
 
@@ -624,6 +745,10 @@ fun AppNavigation(
                         .take(5)
                         .map { it.key }
                 }
+                val favoriteSongs by sharedViewModel.favoriteSongs
+                    .collectAsStateWithLifecycle(initialValue = emptyList())
+                val recentlyPlayed by sharedViewModel.recentlyPlayed
+                    .collectAsStateWithLifecycle(initialValue = emptyList())
                 StatisticsScreen(
                     totalSongs = songs.size,
                     totalArtists = artists.size,
@@ -631,6 +756,8 @@ fun AppNavigation(
                     totalListeningTimeMinutes = listenTime / 60,
                     topSongs = topSongs,
                     topArtistNames = topArtistNames,
+                    favoriteSongs = favoriteSongs,
+                    recentlyPlayed = recentlyPlayed,
                     onBack = { safePopBackStack() }
                 )
             }
@@ -662,6 +789,7 @@ fun AppNavigation(
                         musicPlayer.play()
                         navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
                     },
+                    currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
@@ -670,7 +798,7 @@ fun AppNavigation(
                 route = Routes.AlbumSongs.route,
                 arguments = listOf(navArgument("albumId") { type = NavType.LongType })
             ) { backStackEntry ->
-                val albumId = backStackEntry.arguments!!.getLong("albumId")
+                val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
                 val albumSongs by sharedViewModel.repository.getSongsByAlbum(albumId)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
                 val albumTitle = albumSongs.firstOrNull()?.album ?: ""
@@ -694,6 +822,7 @@ fun AppNavigation(
                         musicPlayer.play()
                         navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
                     },
+                    currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
@@ -725,6 +854,7 @@ fun AppNavigation(
                         musicPlayer.play()
                         navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
                     },
+                    currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
@@ -757,6 +887,7 @@ fun AppNavigation(
                         musicPlayer.play()
                         navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
                     },
+                    currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
@@ -788,7 +919,7 @@ fun AppNavigation(
                         )
                     } else {
                         LazyColumn {
-                            itemsIndexed(queue, key = { _, song -> song.id }) { index, song ->
+                            itemsIndexed(queue, key = { index, song -> "${index}_${song.id}" }) { index, song ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -808,6 +939,8 @@ fun AppNavigation(
                                             musicPlayer.play()
                                             showQueueSheet = false
                                         },
+                                        onPlayNext = { musicPlayer.playSongNext(song); showQueueSheet = false },
+                                        onAddToQueue = { musicPlayer.addToQueue(song) },
                                         onFavoriteToggle = { sharedViewModel.toggleFavorite(song) },
                                         onAddToPlaylist = { sharedViewModel.showAddToPlaylistDialog(song.id) },
                                         onDeleteSong = { songToDelete = song }
@@ -818,13 +951,14 @@ fun AppNavigation(
                                             contentDescription = stringResource(R.string.remove),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
+        }
+    }
+}
+}
+}
         }
     }
 }

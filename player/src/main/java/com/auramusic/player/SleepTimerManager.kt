@@ -19,8 +19,7 @@ class SleepTimerManager(
 ) {
 
     private var job: Job? = null
-    private val exceptionHandler = CoroutineExceptionHandler { _, e -> e.printStackTrace() }
-    private var scope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _remainingSeconds = MutableStateFlow(0L)
     val remainingSeconds: StateFlow<Long> = _remainingSeconds.asStateFlow()
@@ -47,8 +46,32 @@ class SleepTimerManager(
         _remainingSeconds.value = durationMinutes * 60L
         _isActive.value = true
         scope.launch {
-            try { preferences.setSleepTimerActive(true) } catch (_: Exception) {}
+            try {
+                preferences.setSleepTimerActive(true)
+                preferences.setSleepTimer(durationMinutes * 60L)
+            } catch (_: Exception) {}
         }
+        job = scope.launch {
+            try {
+                while (_remainingSeconds.value > 0) {
+                    delay(1000)
+                    _remainingSeconds.value -= 1
+                    if (_remainingSeconds.value <= 30 && _remainingSeconds.value > 0) {
+                        _warningSeconds.value = _remainingSeconds.value
+                    }
+                }
+                _isActive.value = false
+                _warningSeconds.value = 0
+                onTimerEnd()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun restore(durationMinutes: Int) {
+        job?.cancel()
+        job = null
+        _remainingSeconds.value = durationMinutes * 60L
+        _isActive.value = true
         job = scope.launch {
             try {
                 while (_remainingSeconds.value > 0) {
@@ -85,6 +108,5 @@ class SleepTimerManager(
     fun release() {
         stop()
         scope.cancel()
-        scope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
     }
 }

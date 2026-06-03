@@ -2,14 +2,15 @@ package com.auramusic.ui.screens.nowplaying
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -29,30 +29,31 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import com.auramusic.R
-import com.auramusic.player.AuraMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import android.os.Build
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import com.auramusic.R
+import android.os.Build
 import com.auramusic.domain.model.Song
+import com.auramusic.player.AuraMode
 import com.auramusic.ui.components.AlbumArtImage
+import com.auramusic.ui.components.LyricsDisplay
 import com.auramusic.ui.theme.*
-import com.auramusic.util.getAlbumArtUri
 import com.auramusic.util.formatDuration
+import com.auramusic.util.getAlbumArtUri
+import com.auramusic.util.LyricData
 import kotlin.math.PI
-import kotlin.math.sin
-import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.absoluteValue
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.random.Random
-
-@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
-@Suppress("UnusedContentLambdaTargetStateParameter")
 @Composable
 fun NowPlayingScreen(
     currentSong: Song?,
@@ -61,6 +62,7 @@ fun NowPlayingScreen(
     duration: Long,
     shuffleMode: Boolean,
     repeatMode: Int,
+    playbackSpeed: Float = 1f,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -70,6 +72,7 @@ fun NowPlayingScreen(
     onToggleFavorite: () -> Unit,
     onBack: () -> Unit,
     onQueue: () -> Unit,
+    onSpeedChange: (Float) -> Unit = {},
     sleepTimerActive: Boolean = false,
     sleepTimerWarning: Long = 0L,
     onSleepTimerClick: () -> Unit = {},
@@ -78,8 +81,13 @@ fun NowPlayingScreen(
     auraMode: AuraMode = AuraMode.DEFAULT,
     fftMagnitudes: List<Float> = List(6) { 0f },
     waveform: List<Float> = List(48) { 0f },
-    animationsEnabled: Boolean = true
+    beat: Boolean = false,
+    animationsEnabled: Boolean = true,
+    showVisualizer: Boolean = true,
+    lyricData: LyricData? = null
 ) {
+    var showLyrics by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -102,9 +110,9 @@ fun NowPlayingScreen(
 
         if (animationsEnabled) {
             if (gamerMode) {
-                GamerParticlesOverlay()
+                GamerParticlesOverlay(beat = beat, fftMagnitudes = fftMagnitudes)
             } else if (isPlaying) {
-                AmbientParticlesOverlay(dominantColor = dominantColor, auraMode = auraMode)
+                AmbientParticlesOverlay(dominantColor = dominantColor, auraMode = auraMode, beat = beat, fftMagnitudes = fftMagnitudes)
             }
         }
 
@@ -121,7 +129,10 @@ fun NowPlayingScreen(
                 sleepTimerActive = sleepTimerActive,
                 onSleepTimerClick = onSleepTimerClick,
                 dominantColor = dominantColor,
-                gamerMode = gamerMode
+                gamerMode = gamerMode,
+                hasLyrics = lyricData != null && lyricData.lines.isNotEmpty(),
+                showLyrics = showLyrics,
+                onToggleLyrics = { showLyrics = !showLyrics }
             )
 
             if (sleepTimerWarning > 0) {
@@ -143,7 +154,7 @@ fun NowPlayingScreen(
             }
 
             val swipeThreshold = with(LocalDensity.current) { 80.dp.toPx() }
-            var dragOffsetX by remember { mutableStateOf(0f) }
+            var dragOffsetX by remember { mutableFloatStateOf(0f) }
             var isDragging by remember { mutableStateOf(false) }
             val swipeProgress by animateFloatAsState(
                 targetValue = if (isDragging) dragOffsetX else 0f,
@@ -160,89 +171,88 @@ fun NowPlayingScreen(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                val density = LocalDensity.current
-                var previousSong by remember { mutableStateOf<Song?>(null) }
-                SideEffect { previousSong = currentSong }
-
-                AnimatedContent(
-                    targetState = currentSong?.id ?: -1L,
-                    transitionSpec = {
-                        val direction = if (targetState > initialState) -1 else 1
-                        val animOffset = with(density) { 120.dp.toPx() * direction }
-                        slideInHorizontally(
-                            animationSpec = tween(350, easing = FastOutSlowInEasing),
-                            initialOffsetX = { animOffset.toInt() }
-                        ) togetherWith slideOutHorizontally(
-                            animationSpec = tween(250),
-                            targetOffsetX = { -animOffset.toInt() }
-                        ) using SizeTransform(clip = false)
-                    },
-                    label = "now_playing_content"
-                ) { targetSongId ->
-                    val displaySong = remember(targetSongId) {
-                        when (targetSongId) {
-                            currentSong?.id -> currentSong
-                            previousSong?.id -> previousSong
-                            else -> null
-                        }
-                    }
-                    if (displaySong != null) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .offset(x = with(density) { swipeProgress.toDp() })
-                                .graphicsLayer {
-                                    val progress = (swipeProgress / swipeThreshold).coerceIn(-1f, 1f)
-                                    val absProgress = progress.absoluteValue
-                                    scaleX = 1f - absProgress * 0.05f
-                                    scaleY = 1f - absProgress * 0.05f
-                                    alpha = 1f - absProgress * 0.15f
-                                }
-                                .pointerInput(displaySong.id) {
-                                    var totalDrag = 0f
-                                    detectHorizontalDragGestures(
-                                        onDragStart = {
-                                            isDragging = true
-                                        },
-                                        onDragEnd = {
-                                            isDragging = false
-                                            if (totalDrag < -swipeThreshold) {
+                if (showLyrics && lyricData != null) {
+                    LyricsDisplay(
+                        lines = lyricData.lines,
+                        currentPositionMs = currentPosition,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    val density = LocalDensity.current
+                    AnimatedContent(
+                        targetState = currentSong?.id ?: -1L,
+                        transitionSpec = {
+                            val direction = if (targetState > initialState) -1 else 1
+                            val animOffset = with(density) { 120.dp.toPx() * direction }
+                            slideInHorizontally(
+                                animationSpec = tween(350, easing = FastOutSlowInEasing),
+                                initialOffsetX = { animOffset.toInt() }
+                            ) togetherWith slideOutHorizontally(
+                                animationSpec = tween(250),
+                                targetOffsetX = { -animOffset.toInt() }
+                            ) using SizeTransform(clip = false)
+                        },
+                        label = "now_playing_content"
+                    ) { _ ->
+                        if (currentSong != null) {
+                            val song = currentSong
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset { IntOffset(swipeProgress.roundToInt(), 0) }
+                                    .graphicsLayer {
+                                        val progress = (swipeProgress / swipeThreshold).coerceIn(-1f, 1f)
+                                        val absProgress = progress.absoluteValue
+                                        scaleX = 1f - absProgress * 0.05f
+                                        scaleY = 1f - absProgress * 0.05f
+                                        alpha = 1f - absProgress * 0.15f
+                                    }
+                                    .pointerInput(song.id) {
+                                        var totalDrag = 0f
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                isDragging = true
+                                            },
+                                            onDragEnd = {
+                                                isDragging = false
+                                                if (totalDrag < -swipeThreshold) {
+                                                    dragOffsetX = 0f
+                                                    onNext()
+                                                } else if (totalDrag > swipeThreshold) {
+                                                    dragOffsetX = 0f
+                                                    onPrevious()
+                                                } else {
+                                                    dragOffsetX = 0f
+                                                }
+                                                totalDrag = 0f
+                                            },
+                                            onDragCancel = {
+                                                isDragging = false
+                                                totalDrag = 0f
                                                 dragOffsetX = 0f
-                                                onNext()
-                                            } else if (totalDrag > swipeThreshold) {
-                                                dragOffsetX = 0f
-                                                onPrevious()
-                                            } else {
-                                                dragOffsetX = 0f
+                                            },
+                                            onHorizontalDrag = { _, dragAmount ->
+                                                totalDrag = (totalDrag + dragAmount).coerceIn(
+                                                    -swipeThreshold * 2,
+                                                    swipeThreshold * 2
+                                                )
+                                                dragOffsetX = totalDrag
                                             }
-                                            totalDrag = 0f
-                                        },
-                                        onDragCancel = {
-                                            isDragging = false
-                                            totalDrag = 0f
-                                            dragOffsetX = 0f
-                                        },
-                                        onHorizontalDrag = { _, dragAmount ->
-                                            totalDrag = (totalDrag + dragAmount).coerceIn(
-                                                -swipeThreshold * 2,
-                                                swipeThreshold * 2
-                                            )
-                                            dragOffsetX = totalDrag
-                                        }
-                                    )
-                                },
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            AlbumArtSection(currentSong = displaySong, dominantColor = dominantColor, gamerMode = gamerMode)
-                            Spacer(modifier = Modifier.height(24.dp))
-                            SongInfoSection(currentSong = displaySong, gamerMode = gamerMode)
+                                        )
+                                    },
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                AlbumArtSection(currentSong = song, dominantColor = dominantColor, gamerMode = gamerMode, beat = beat)
+                                Spacer(modifier = Modifier.height(24.dp))
+                                SongInfoSection(currentSong = song, gamerMode = gamerMode)
+                            }
+                        } else {
+                            Text(
+                                text = stringResource(R.string.no_track_selected),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
-                    } else {
-                        Text(
-                            text = stringResource(R.string.no_track_selected),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
                     }
                 }
             }
@@ -258,8 +268,10 @@ fun NowPlayingScreen(
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    AudioVisualizer(isActive = isPlaying, dominantColor = dominantColor, gamerMode = gamerMode, auraMode = auraMode, fftMagnitudes = fftMagnitudes)
-                    if (animationsEnabled && waveform.any { it > 0.01f }) {
+                    if (showVisualizer) {
+                        AudioVisualizer(isActive = isPlaying, dominantColor = dominantColor, gamerMode = gamerMode, auraMode = auraMode, fftMagnitudes = fftMagnitudes)
+                    }
+                    if (showVisualizer && animationsEnabled && waveform.any { it > 0.01f }) {
                         Spacer(modifier = Modifier.height(6.dp))
                         WaveformVisualizer(waveform = waveform, dominantColor = dominantColor, gamerMode = gamerMode)
                     }
@@ -268,7 +280,8 @@ fun NowPlayingScreen(
                         currentPosition = currentPosition,
                         duration = duration,
                         onSeek = onSeek,
-                        dominantColor = dominantColor
+                        dominantColor = dominantColor,
+                        isPlaying = isPlaying
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     TimeLabels(
@@ -280,11 +293,13 @@ fun NowPlayingScreen(
                         isPlaying = isPlaying,
                         shuffleMode = shuffleMode,
                         repeatMode = repeatMode,
+                        playbackSpeed = playbackSpeed,
                         onPlayPause = onPlayPause,
                         onNext = onNext,
                         onPrevious = onPrevious,
                         onToggleShuffle = onToggleShuffle,
                         onToggleRepeat = onToggleRepeat,
+                        onSpeedChange = onSpeedChange,
                         dominantColor = dominantColor,
                         gamerMode = gamerMode
                     )
@@ -305,7 +320,10 @@ private fun NowPlayingTopBar(
     sleepTimerActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
     dominantColor: Color = NeonPurple,
-    gamerMode: Boolean = false
+    gamerMode: Boolean = false,
+    hasLyrics: Boolean = false,
+    showLyrics: Boolean = false,
+    onToggleLyrics: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -315,7 +333,7 @@ private fun NowPlayingTopBar(
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.Rounded.ArrowBack,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                 contentDescription = stringResource(R.string.back),
                 tint = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.size(28.dp)
@@ -347,6 +365,19 @@ private fun NowPlayingTopBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        if (hasLyrics) {
+            @Suppress("DEPRECATION")
+            val lyricsIcon = if (showLyrics) Icons.Rounded.SpeakerNotesOff else Icons.Rounded.SpeakerNotes
+            IconButton(onClick = onToggleLyrics) {
+                Icon(
+                    imageVector = lyricsIcon,
+                    contentDescription = if (showLyrics) "Show album art" else "Show lyrics",
+                    tint = if (showLyrics) dominantColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -358,7 +389,7 @@ private fun NowPlayingTopBar(
 
         IconButton(onClick = onQueue) {
             Icon(
-                imageVector = Icons.Rounded.QueueMusic,
+                imageVector = Icons.Rounded.MusicNote,
                 contentDescription = stringResource(R.string.queue),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(26.dp)
@@ -376,9 +407,16 @@ private fun NowPlayingTopBar(
 }
 
 @Composable
-private fun AlbumArtSection(currentSong: Song, dominantColor: Color = NeonPurple, gamerMode: Boolean = false) {
+private fun AlbumArtSection(currentSong: Song, dominantColor: Color = NeonPurple, gamerMode: Boolean = false, beat: Boolean = false) {
     val context = LocalContext.current
     val albumArtUri = remember(currentSong.albumId) { context.getAlbumArtUri(currentSong.albumId) }
+
+    val beatAnim by animateFloatAsState(
+        targetValue = if (beat) 1.2f else 1f,
+        animationSpec = spring(dampingRatio = 0.3f, stiffness = Spring.StiffnessHigh),
+        label = "beat_glow"
+    )
+
     val infiniteTransition = rememberInfiniteTransition(label = "rgb_border")
     val hue by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -432,28 +470,27 @@ private fun AlbumArtSection(currentSong: Song, dominantColor: Color = NeonPurple
 
         Box(
             modifier = Modifier
-                .size(310.dp)
+                .size((310 * beatAnim).dp)
                 .clip(RoundedCornerShape(32.dp))
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            dominantColor.copy(alpha = 0.25f),
+                            dominantColor.copy(alpha = 0.15f * beatAnim),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        Box(
-            modifier = Modifier
-                .size(280.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    width = if (gamerMode) 2.dp else 1.dp,
-                    brush = borderBrush,
-                    shape = RoundedCornerShape(24.dp)
-                )
+        Box(modifier = Modifier
+            .size(280.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = if (gamerMode) 2.dp else 1.dp,
+                brush = borderBrush,
+                shape = RoundedCornerShape(24.dp)
+            )
         ) {
             AlbumArtImage(
                 uri = albumArtUri,
@@ -530,38 +567,75 @@ private fun SongInfoSection(currentSong: Song, gamerMode: Boolean = false) {
 
 @Composable
 private fun WaveformVisualizer(waveform: List<Float>, dominantColor: Color, gamerMode: Boolean) {
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val infiniteTransition = rememberInfiniteTransition(label = "waveform")
+    val waveHue by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart),
+        label = "wave_hue"
+    )
+
+    val fillBrush = if (gamerMode) {
+        Brush.horizontalGradient(
+            listOf(
+                Color.hsl(waveHue % 360f, 1f, 0.6f, 0.7f),
+                Color.hsl((waveHue + 120f) % 360f, 1f, 0.5f, 0.5f),
+                Color.hsl((waveHue + 240f) % 360f, 1f, 0.6f, 0.4f),
+            )
+        )
+    } else {
+        Brush.horizontalGradient(
+            listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                dominantColor.copy(alpha = 0.4f)
+            )
+        )
+    }
+
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(24.dp)
+            .height(if (gamerMode) 36.dp else 24.dp)
     ) {
-        val barWidth = size.width / waveform.size
-        val halfHeight = size.height / 2f
-        val path = Path()
-        waveform.forEachIndexed { index, value ->
-            val x = index * barWidth
-            val h = (value * halfHeight).coerceIn(1f, halfHeight)
-            if (index == 0) {
-                path.moveTo(x, halfHeight - h)
-            } else {
-                path.lineTo(x, halfHeight - h)
-            }
-        }
-        for (i in waveform.indices.reversed()) {
-            val x = i * barWidth
-            val h = (waveform[i] * halfHeight).coerceIn(1f, halfHeight)
-            path.lineTo(x, halfHeight + h)
-        }
-        path.close()
-        drawPath(
-            path,
-            brush = Brush.horizontalGradient(
-                listOf(
-                    primaryColor.copy(alpha = 0.6f),
-                    dominantColor.copy(alpha = 0.4f)
-                )
+        if (gamerMode) {
+            drawPath(
+                path = Path().apply {
+                    val bw = size.width / waveform.size
+                    val hh = size.height / 2f
+                    waveform.forEachIndexed { i, v ->
+                        val x = i * bw
+                        val h = (v * hh).coerceIn(1f, hh)
+                        if (i == 0) moveTo(x, hh - h) else lineTo(x, hh - h)
+                    }
+                    for (i in waveform.indices.reversed()) {
+                        val x = i * bw
+                        val h = (waveform[i] * hh).coerceIn(1f, hh)
+                        lineTo(x, hh + h)
+                    }
+                    close()
+                },
+                brush = fillBrush,
+                alpha = 0.2f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f)
             )
+        }
+        drawPath(
+            path = Path().apply {
+                val bw = size.width / waveform.size
+                val hh = size.height / 2f
+                waveform.forEachIndexed { i, v ->
+                    val x = i * bw
+                    val h = (v * hh).coerceIn(1f, hh)
+                    if (i == 0) moveTo(x, hh - h) else lineTo(x, hh - h)
+                }
+                for (i in waveform.indices.reversed()) {
+                    val x = i * bw
+                    val h = (waveform[i] * hh).coerceIn(1f, hh)
+                    lineTo(x, hh + h)
+                }
+                close()
+            },
+            brush = fillBrush
         )
     }
 }
@@ -579,7 +653,7 @@ private fun AudioVisualizer(isActive: Boolean, dominantColor: Color = NeonPurple
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "visualizer")
-    val restHeights = remember { List(barCount) { mutableStateOf(0.3f) } }
+    val restHeights = remember { List(barCount) { mutableFloatStateOf(0.3f) } }
     val animatedHeights: List<State<Float>> = if (isActive) {
         List(barCount) { i ->
             infiniteTransition.animateFloat(
@@ -599,45 +673,85 @@ private fun AudioVisualizer(isActive: Boolean, dominantColor: Color = NeonPurple
         restHeights
     }
 
+    val rawTargets = List(barCount) { i ->
+        if (hasFftData && i < fftMagnitudes.size) fftMagnitudes[i].coerceIn(0.05f, 1f)
+        else animatedHeights[i].value
+    }
+
+    val smoothHeights = List(barCount) { i ->
+        animateFloatAsState(
+            targetValue = rawTargets[i],
+            animationSpec = tween(durationMillis = if (gamerMode) 80 else 120, easing = LinearEasing),
+            label = "fft_smooth_$i"
+        )
+    }
+
     Row(
-        modifier = Modifier.height(32.dp),
+        modifier = Modifier.height(if (gamerMode) 40.dp else 32.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        animatedHeights.forEachIndexed { index, animHeight ->
-            val fftHeight = if (hasFftData && index < fftMagnitudes.size) {
-                fftMagnitudes[index].coerceIn(0.05f, 1f)
-            } else animHeight.value
+        animatedHeights.forEachIndexed { index, _ ->
+            val animatedFft = smoothHeights[index].value.coerceIn(0.05f, 1f)
 
             val barColor = when {
                 gamerMode && isActive -> {
-                    val hue = (index * 60f + animHeight.value * 360f) % 360f
-                    Color.hsl(hue, 1f, 0.6f)
+                    val hue = (index * 60f + animatedFft * 360f) % 360f
+                    Color.hsl(hue, 1f, 0.65f)
                 }
                 auraMode == AuraMode.ENERGY && isActive -> {
-                    Color.hsl(350f + animHeight.value * 20f, 0.8f, 0.6f)
+                    Color.hsl((350f + animatedFft * 20f) % 360f, 0.8f, 0.6f)
                 }
                 auraMode == AuraMode.CALM && isActive -> {
-                    Color.hsl(200f + animHeight.value * 40f, 0.6f, 0.6f)
+                    Color.hsl(200f + animatedFft * 40f, 0.6f, 0.6f)
                 }
                 auraMode == AuraMode.NEON -> {
-                    val hue = (index * 72f + animHeight.value * 180f) % 360f
+                    val hue = (index * 72f + animatedFft * 180f) % 360f
                     Color.hsl(hue, 1f, 0.6f)
                 }
                 else -> dominantColor
             }
 
+            val barWidth = if (gamerMode || auraMode == AuraMode.NEON) 4.dp else 3.dp
+            val barShape = RoundedCornerShape(2.dp)
+
             Box(
                 modifier = Modifier
-                    .width(if (gamerMode || auraMode == AuraMode.NEON) 4.dp else 3.dp)
-                    .height((4.dp + (fftHeight * 28).dp))
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(barColor, MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f))
-                        )
+                    .width(if (gamerMode) 10.dp else barWidth)
+                    .height((4.dp + (animatedFft * 32).dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (gamerMode && isActive) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .blur(6.dp)
+                            .clip(barShape)
+                            .background(barColor.copy(alpha = 0.4f))
                     )
-            )
+                }
+                Box(
+                    modifier = Modifier
+                        .width(barWidth)
+                        .fillMaxHeight()
+                        .clip(barShape)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(barColor, barColor.copy(alpha = 0.6f))
+                            )
+                        )
+                )
+                if (gamerMode && isActive) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(barColor)
+                            .align(Alignment.TopCenter)
+                    )
+                }
+            }
         }
     }
 }
@@ -651,16 +765,31 @@ private fun GradientSeekbar(
     dominantColor: Color = NeonPurple,
     trackColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    thumbColor: Color = MaterialTheme.colorScheme.onBackground
+    thumbColor: Color = MaterialTheme.colorScheme.onBackground,
+    isPlaying: Boolean = false
 ) {
-    val progress = if (duration > 0) {
-        (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-    } else 0f
+    val animatedDominant = if (isPlaying) {
+        val infiniteTransition = rememberInfiniteTransition(label = "seekbar_grad")
+        val hue by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart),
+            label = "seekbar_hue"
+        )
+        Color.hsl(hue, 0.7f, 0.55f)
+    } else dominantColor
+    val safeDuration = if (duration > 0L) duration else 1L
+    val progress = (currentPosition.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(32.dp)
+            .pointerInput(duration) {
+                detectTapGestures { offset ->
+                    val p = (offset.x / size.width).coerceIn(0f, 1f)
+                    onSeek((p * duration).toLong())
+                }
+            }
             .pointerInput(duration) {
                 detectDragGestures(
                     onDragStart = { offset ->
@@ -695,7 +824,7 @@ private fun GradientSeekbar(
             if (progressWidth > 0f) {
                 drawRoundRect(
                     brush = Brush.horizontalGradient(
-                        colors = listOf(dominantColor, secondaryColor)
+                        colors = listOf(animatedDominant, secondaryColor)
                     ),
                     topLeft = Offset(0f, trackOffset),
                     size = Size(progressWidth, trackHeight),
@@ -709,7 +838,7 @@ private fun GradientSeekbar(
                 center = Offset(progressWidth, canvasHeight / 2f)
             )
             drawCircle(
-                color = dominantColor,
+                color = animatedDominant,
                 radius = thumbInnerRadius,
                 center = Offset(progressWidth, canvasHeight / 2f)
             )
@@ -746,14 +875,18 @@ private fun ControlsRow(
     isPlaying: Boolean,
     shuffleMode: Boolean,
     repeatMode: Int,
+    playbackSpeed: Float = 1f,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
+    onSpeedChange: (Float) -> Unit = {},
     dominantColor: Color = NeonPurple,
     gamerMode: Boolean = false
 ) {
+    val availableSpeeds = remember { listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -845,13 +978,43 @@ private fun ControlsRow(
             )
         }
     }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = {
+                val idx = availableSpeeds.indexOf(playbackSpeed)
+                val nextIdx = if (idx < 0 || idx >= availableSpeeds.size - 1) 0 else idx + 1
+                onSpeedChange(availableSpeeds[nextIdx])
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Text(
+                text = "x${"%.2f".format(playbackSpeed).trimEnd('0').trimEnd('.')}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
 }
 
 @Composable
-private fun GamerParticlesOverlay() {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-    if (!visible) return
+private fun GamerParticlesOverlay(beat: Boolean = false, fftMagnitudes: List<Float> = List(6) { 0f }) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    if (!lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return
+
+    val beatBoost by animateFloatAsState(
+        targetValue = if (beat) 1f else 0f,
+        animationSpec = tween(200),
+        label = "beat_boost"
+    )
+    val energy = fftMagnitudes.sum() / fftMagnitudes.size.coerceAtLeast(1)
 
     val particles = remember {
         List(45) {
@@ -864,6 +1027,35 @@ private fun GamerParticlesOverlay() {
                 hueOffset = Random.nextFloat() * 360f,
                 trail = Random.nextFloat() > 0.5f
             )
+        }
+    }
+
+    val bursts = remember { mutableStateListOf<BurstParticle>() }
+
+    LaunchedEffect(beat) {
+        if (beat && energy > 0.3f) {
+            val count = 6 + (energy * 8).toInt().coerceAtMost(12)
+            repeat(count) {
+                bursts.add(
+                    BurstParticle(
+                        startX = Random.nextFloat(),
+                        startY = Random.nextFloat(),
+                        angle = (Random.nextFloat() * 2f * PI).toFloat(),
+                        speed = 0.004f + Random.nextFloat() * 0.008f,
+                        size = 4f + Random.nextFloat() * 6f,
+                        hue = Random.nextFloat() * 360f,
+                        createdAt = System.nanoTime()
+                    )
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(500)
+            val now = System.nanoTime()
+            bursts.removeAll { (now - it.createdAt) / 1_000_000 > 1200 }
         }
     }
 
@@ -880,19 +1072,41 @@ private fun GamerParticlesOverlay() {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val beatScale = 1f + beatBoost * 1.5f
+            val fftPulse = 1f + energy * 2f
+
+            val now = System.nanoTime()
+
+            bursts.forEach { b ->
+                val elapsed = ((now - b.createdAt) / 1_000_000).toFloat()
+                if (elapsed > 1200f) return@forEach
+                val progress = elapsed / 1200f
+                val dist = progress * b.speed * 0.5f
+                val bx = ((b.startX + cos(b.angle) * dist) % 1f + 1f) % 1f
+                val by = ((b.startY + sin(b.angle) * dist) % 1f + 1f) % 1f
+                val alpha = (1f - progress).coerceIn(0f, 1f) * 0.8f
+                val radius = b.size.dp.toPx() * (1f + progress * 2f) * beatScale * fftPulse
+
+                drawCircle(
+                    color = Color.hsl(b.hue, 1f, 0.6f, alpha),
+                    radius = radius,
+                    center = Offset(bx * size.width, by * size.height)
+                )
+            }
+
             particles.forEach { p ->
-                val t = time * p.speed
+                val t = time * p.speed * (1f + beatBoost * 2f)
                 val angleRad1 = p.baseAngleRad + t * 60f
                 val angleRad2 = p.baseAngleRad + t * 45f
                 val x = ((p.startX + cos(angleRad1) * 0.35f + t * 0.12f) % 1f + 1f) % 1f
                 val y = ((p.startY + sin(angleRad2) * 0.35f + t * 0.08f) % 1f + 1f) % 1f
                 val hue = (p.hueOffset + time * 0.8f) % 360f
-                val alpha = ((cos(angleRad1 + p.hueOffset) * 0.2f + 0.5f)).coerceIn(0.15f, 0.7f)
-                val radius = p.size.dp.toPx()
+                val alpha = ((cos(angleRad1 + p.hueOffset) * 0.2f + 0.5f)).coerceIn(0.15f, 0.7f) * (1f + beatBoost * 0.5f)
+                val radius = p.size.dp.toPx() * beatScale * fftPulse
 
                 if (p.trail) {
                     drawCircle(
-                        color = Color.hsl(hue, 1f, 0.5f, alpha * 0.15f),
+                        color = Color.hsl(hue, 1f, 0.5f, alpha * 0.15f * (1f + beatBoost)),
                         radius = radius * 2.5f,
                         center = Offset(x * size.width, y * size.height)
                     )
@@ -927,10 +1141,16 @@ private fun GamerParticlesOverlay() {
 }
 
 @Composable
-private fun AmbientParticlesOverlay(dominantColor: Color, auraMode: AuraMode = AuraMode.DEFAULT) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-    if (!visible) return
+private fun AmbientParticlesOverlay(dominantColor: Color, auraMode: AuraMode = AuraMode.DEFAULT, beat: Boolean = false, fftMagnitudes: List<Float> = List(6) { 0f }) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    if (!lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return
+
+    val beatBoost by animateFloatAsState(
+        targetValue = if (beat) 1f else 0f,
+        animationSpec = tween(200),
+        label = "ambient_beat"
+    )
+    val energy = fftMagnitudes.sum() / fftMagnitudes.size.coerceAtLeast(1)
 
     val particleCount = when (auraMode) {
         AuraMode.ENERGY -> 8
@@ -965,15 +1185,16 @@ private fun AmbientParticlesOverlay(dominantColor: Color, auraMode: AuraMode = A
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        val pulse = 1f + beatBoost * 2f + energy * 3f
         particles.forEach { p ->
             val angleRad = p.baseAngleRad + time * p.speed * 30f
             val x = ((p.startX + cos(angleRad) * 0.2f + time * p.driftX) % 1f + 1f) % 1f
             val y = ((p.startY + sin(angleRad) * 0.15f + time * p.driftY) % 1f + 1f) % 1f
-            val alpha = ((cos(angleRad * 2f) * 0.15f + 0.25f)).coerceIn(0.05f, 0.35f)
+            val alpha = ((cos(angleRad * 2f) * 0.15f + 0.25f)).coerceIn(0.05f, 0.35f) * (1f + beatBoost)
 
             drawCircle(
                 color = dominantColor.copy(alpha = alpha),
-                radius = p.size.dp.toPx(),
+                radius = p.size.dp.toPx() * pulse,
                 center = Offset(x * size.width, y * size.height)
             )
         }
@@ -998,4 +1219,14 @@ private data class GamerParticle(
     val size: Float,
     val hueOffset: Float,
     val trail: Boolean = false
+)
+
+private data class BurstParticle(
+    val startX: Float,
+    val startY: Float,
+    val angle: Float,
+    val speed: Float,
+    val size: Float,
+    val hue: Float,
+    val createdAt: Long
 )

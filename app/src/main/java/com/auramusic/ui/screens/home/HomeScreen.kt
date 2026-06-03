@@ -1,6 +1,7 @@
 package com.auramusic.ui.screens.home
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
@@ -19,8 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.auramusic.domain.model.Album
+import com.auramusic.ui.components.cardWidthForScreen
+import com.auramusic.ui.components.rememberWindowAdaptiveInfo
 import com.auramusic.domain.model.Playlist
 import com.auramusic.domain.model.Song
 import com.auramusic.ui.components.*
@@ -49,7 +53,8 @@ fun HomeScreen(
     albums: List<Album>,
     isScanning: Boolean,
     onScan: () -> Unit,
-    onCreatePlaylist: () -> Unit
+    onCreatePlaylist: () -> Unit,
+    currentSongId: Long? = null
 ) {
     Scaffold(
         topBar = {
@@ -98,6 +103,10 @@ fun HomeScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+        val adaptiveInfo = rememberWindowAdaptiveInfo()
+        val songCardSize = cardWidthForScreen(adaptiveInfo.screenWidthDp, compact = 160, expanded = 200).dp
+        val playlistCardSize = cardWidthForScreen(adaptiveInfo.screenWidthDp, compact = 140, expanded = 180).dp
+        val albumCardSize = cardWidthForScreen(adaptiveInfo.screenWidthDp, compact = 140, expanded = 180).dp
         if (isScanning) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -121,7 +130,8 @@ fun HomeScreen(
                         HorizontalSongRow(
                             songs = recentlyPlayed,
                             onPlay = onPlaySong,
-                            onToggleFavorite = onToggleFavorite
+                            onToggleFavorite = onToggleFavorite,
+                            currentSongId = currentSongId
                         )
                     }
                 }
@@ -132,7 +142,8 @@ fun HomeScreen(
                         HorizontalSongRow(
                             songs = favoriteSongs,
                             onPlay = onPlaySong,
-                            onToggleFavorite = onToggleFavorite
+                            onToggleFavorite = onToggleFavorite,
+                            currentSongId = currentSongId
                         )
                     }
                 }
@@ -143,7 +154,8 @@ fun HomeScreen(
                         HorizontalSongRow(
                             songs = recentlyAdded,
                             onPlay = onPlaySong,
-                            onToggleFavorite = onToggleFavorite
+                            onToggleFavorite = onToggleFavorite,
+                            currentSongId = currentSongId
                         )
                     }
                 }
@@ -166,7 +178,8 @@ fun HomeScreen(
                             playlists.take(5).forEach { playlist ->
                                 PlaylistCard(
                                     playlist = playlist,
-                                    onClick = { onNavigateToPlaylist(playlist.id) }
+                                    onClick = { onNavigateToPlaylist(playlist.id) },
+                                    cardSize = playlistCardSize
                                 )
                             }
                         }
@@ -189,7 +202,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             albums.take(10).forEach { album ->
-                                AlbumCard(album = album, onClick = { onNavigateToAlbum(album.id) })
+                                AlbumCard(album = album, onClick = { onNavigateToAlbum(album.id) }, cardSize = albumCardSize)
                             }
                         }
                     }
@@ -205,7 +218,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             mostPlayed.take(10).forEach { song ->
-                                SongCard(song = song, onClick = { onPlaySong(song) })
+                                SongCard(song = song, onClick = { onPlaySong(song) }, cardSize = songCardSize, isCurrentlyPlaying = song.id == currentSongId)
                             }
                         }
                     }
@@ -221,8 +234,11 @@ fun HomeScreen(
 fun HorizontalSongRow(
     songs: List<Song>,
     onPlay: (Song) -> Unit,
-    onToggleFavorite: (Song) -> Unit
+    onToggleFavorite: (Song) -> Unit,
+    currentSongId: Long? = null
 ) {
+    val adaptiveInfo = rememberWindowAdaptiveInfo()
+    val cardW = cardWidthForScreen(adaptiveInfo.screenWidthDp).dp
     Row(
         modifier = Modifier
             .horizontalScroll(rememberScrollState())
@@ -230,25 +246,40 @@ fun HorizontalSongRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         songs.take(10).forEach { song ->
-            SongCard(song = song, onClick = { onPlay(song) })
+            SongCard(song = song, onClick = { onPlay(song) }, cardSize = cardW, isCurrentlyPlaying = song.id == currentSongId)
         }
     }
 }
 
 @Composable
-fun SongCard(song: Song, onClick: () -> Unit) {
+fun SongCard(song: Song, onClick: () -> Unit, cardSize: Dp = 160.dp, isCurrentlyPlaying: Boolean = false) {
     val context = LocalContext.current
     val albumArtUri = remember(song.albumId) { context.getAlbumArtUri(song.albumId) }
     Column(
         modifier = Modifier
-            .width(160.dp)
+            .width(cardSize)
             .clickable { onClick() }
     ) {
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+        Box(modifier = Modifier
+            .size(cardSize)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    )
+                )
+            )
+            .border(
+                width = if (isCurrentlyPlaying) 2.dp else 0.5.dp,
+                brush = if (isCurrentlyPlaying) Brush.horizontalGradient(
+                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                ) else Brush.horizontalGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.03f))
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
         ) {
             AlbumArtImage(
                 uri = albumArtUri,
@@ -308,28 +339,38 @@ fun SongCard(song: Song, onClick: () -> Unit) {
 }
 
 @Composable
-fun PlaylistCard(playlist: Playlist, onClick: () -> Unit) {
+fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, cardSize: Dp = 140.dp) {
     Column(
         modifier = Modifier
-            .width(140.dp)
+            .width(cardSize)
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(140.dp)
+                .size(cardSize)
                 .clip(RoundedCornerShape(16.dp))
                 .background(
                     brush = Brush.linearGradient(
                         listOf(Color(playlist.color), Color(playlist.color).copy(alpha = 0.6f))
                     )
+                )
+                .border(
+                    width = 0.5.dp,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.2f),
+                            Color.White.copy(alpha = 0.05f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.QueueMusic,
+                imageVector = Icons.Rounded.MusicNote,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(cardSize * 0.34f)
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -350,15 +391,32 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit) {
 }
 
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit = {}) {
+fun AlbumCard(album: Album, onClick: () -> Unit = {}, cardSize: Dp = 140.dp) {
     val context = LocalContext.current
     val albumArtUri = remember(album.id) { context.getAlbumArtUri(album.id) }
-    Column(modifier = Modifier.width(140.dp).clickable { onClick() }) {
+    Column(modifier = Modifier.width(cardSize).clickable { onClick() }) {
         Box(
             modifier = Modifier
-                .size(140.dp)
+                .size(cardSize)
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                )
+                .border(
+                    width = 0.5.dp,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.03f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
         ) {
             AlbumArtImage(
                 uri = albumArtUri,

@@ -10,6 +10,7 @@ data class Song(
     val duration: Long = 0,
     val path: String = "",
     val size: Long = 0,
+    val bitrate: Int = 0,
     val dateAdded: Long = 0,
     val dateModified: Long = 0,
     val trackNumber: Int = 0,

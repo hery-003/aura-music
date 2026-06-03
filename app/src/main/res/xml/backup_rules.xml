@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="aura_music.db" />
+    <include domain="sharedpref" path="aura_settings.preferences_pb" />
+    <include domain="file" path="." />
+</full-backup-content>

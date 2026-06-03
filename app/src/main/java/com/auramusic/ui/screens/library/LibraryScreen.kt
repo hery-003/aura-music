@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,10 +53,12 @@ fun LibraryScreen(
     onNavigateToPlaylist: (Long) -> Unit,
     onNavigateToNowPlaying: (Long) -> Unit,
     onCreatePlaylist: () -> Unit,
+    onImportPlaylist: () -> Unit = {},
     onArtistClick: (String) -> Unit = {},
     onAlbumClick: (Long) -> Unit = {},
     onGenreClick: (String) -> Unit = {},
-    onFolderClick: (String) -> Unit = {}
+    onFolderClick: (String) -> Unit = {},
+    currentSongId: Long? = null
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -72,7 +75,7 @@ fun LibraryScreen(
             add(TabData(albumsLabel, Icons.Rounded.Album, TabType.ALBUMS))
             if (genres.isNotEmpty()) add(TabData(genresLabel, Icons.Rounded.Category, TabType.GENRES))
             if (folders.isNotEmpty()) add(TabData(foldersLabel, Icons.Rounded.Folder, TabType.FOLDERS))
-            add(TabData(playlistsLabel, Icons.Rounded.QueueMusic, TabType.PLAYLISTS))
+            add(TabData(playlistsLabel, Icons.Rounded.MusicNote, TabType.PLAYLISTS))
         }
     }
 
@@ -119,7 +122,8 @@ fun LibraryScreen(
                         onToggleFavorite = onToggleFavorite,
                         onNavigateToNowPlaying = onNavigateToNowPlaying,
                         onSongMoreOptions = onSongMoreOptions,
-                        onDeleteSong = onDeleteSong
+                        onDeleteSong = onDeleteSong,
+                        currentSongId = currentSongId
                     )
                     TabType.ARTISTS -> ArtistsTab(
                         artists = artists,
@@ -141,6 +145,7 @@ fun LibraryScreen(
                     TabType.PLAYLISTS -> PlaylistsTab(
                         playlists = playlists,
                         onCreatePlaylist = onCreatePlaylist,
+                        onImportPlaylist = onImportPlaylist,
                         onNavigateToPlaylist = onNavigateToPlaylist
                     )
                 }
@@ -174,13 +179,13 @@ private fun LibraryTabChip(icon: ImageVector, label: String, selected: Boolean, 
 }
 
 @Composable
-private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavorite: (Song) -> Unit, onNavigateToNowPlaying: (Long) -> Unit, onSongMoreOptions: (Song) -> Unit = {}, onDeleteSong: (Song) -> Unit = {}) {
+private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavorite: (Song) -> Unit, onNavigateToNowPlaying: (Long) -> Unit, onSongMoreOptions: (Song) -> Unit = {}, onDeleteSong: (Song) -> Unit = {}, currentSongId: Long? = null) {
     if (songs.isEmpty()) {
         EmptyState(icon = { Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_songs_found), subtitle = stringResource(R.string.empty_library))
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(songs, key = { it.id }) { song ->
-                SongItem(song = song, onClick = { onPlaySong(song); onNavigateToNowPlaying(song.id) }, onFavoriteToggle = { onToggleFavorite(song) }, onAddToPlaylist = { onSongMoreOptions(song) }, onDeleteSong = { onDeleteSong(song) })
+                SongItem(song = song, onClick = { onPlaySong(song); onNavigateToNowPlaying(song.id) }, onFavoriteToggle = { onToggleFavorite(song) }, onAddToPlaylist = { onSongMoreOptions(song) }, onDeleteSong = { onDeleteSong(song) }, isCurrentlyPlaying = song.id == currentSongId)
             }
         }
     }
@@ -202,7 +207,7 @@ private fun ArtistsTab(artists: List<String>, songs: List<Song>, onArtistClick: 
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium)
-                        Text("$count song${if (count != 1) "s" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(LocalResources.current.getQuantityString(R.plurals.song_count, count, count), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 NeonDivider()
@@ -250,24 +255,37 @@ private fun AlbumGridItem(album: Album, onClick: () -> Unit = {}) {
 }
 
 @Composable
-private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit, onNavigateToPlaylist: (Long) -> Unit) {
+private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit, onImportPlaylist: () -> Unit = {}, onNavigateToPlaylist: (Long) -> Unit) {
     if (playlists.isEmpty()) {
         Column(Modifier.fillMaxSize().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Rounded.QueueMusic, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
+            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp))
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.no_playlists_yet), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.create_first_playlist), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(24.dp))
-            Button(onClick = onCreatePlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                Icon(Icons.Rounded.Add, null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.create_playlist), fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onCreatePlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Icon(Icons.Rounded.Add, null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.create_playlist), fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(onClick = onImportPlaylist, shape = RoundedCornerShape(12.dp)) {
+                    Icon(Icons.Rounded.FileOpen, null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.import_playlist), fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
+                FilledTonalButton(onClick = onImportPlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)), modifier = Modifier.height(36.dp)) {
+                    Icon(Icons.Rounded.FileOpen, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.import_playlist), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                }
+                Spacer(Modifier.width(8.dp))
                 FilledTonalButton(onClick = onCreatePlaylist, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))) {
                     Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
@@ -287,11 +305,11 @@ private fun PlaylistsTab(playlists: List<Playlist>, onCreatePlaylist: () -> Unit
 private fun PlaylistGridItem(playlist: Playlist, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable { onClick() }) {
         Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(brush = Brush.linearGradient(listOf(Color(playlist.color), Color(playlist.color).copy(alpha = 0.5f)))), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.QueueMusic, null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), modifier = Modifier.size(48.dp))
+            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f), modifier = Modifier.size(48.dp))
         }
         Spacer(Modifier.height(8.dp))
         Text(playlist.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("${playlist.songCount} song${if (playlist.songCount != 1) "s" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(LocalResources.current.getQuantityString(R.plurals.song_count, playlist.songCount, playlist.songCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

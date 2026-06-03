@@ -2,6 +2,7 @@ package com.auramusic.player
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.Virtualizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,14 +18,20 @@ class EqualizerManager {
         const val PRESET_CLASSICAL = 5
         const val PRESET_GAMER = 6
         const val PRESET_CUSTOM = 7
+        const val PRESET_CLARITY = 8
     }
 
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
+    private var virtualizer: Virtualizer? = null
     private var currentAudioSession: Int = -1
 
     private val _currentPreset = MutableStateFlow(PRESET_NORMAL)
     val currentPreset: StateFlow<Int> = _currentPreset.asStateFlow()
+
+    fun restorePreset(preset: Int) {
+        _currentPreset.value = preset
+    }
 
     private val _bandLevels = MutableStateFlow<List<Float>>(emptyList())
     val bandLevels: StateFlow<List<Float>> = _bandLevels.asStateFlow()
@@ -49,13 +56,15 @@ class EqualizerManager {
         if (audioSessionId <= 0) return
         if (equalizer != null) return
         try {
-            equalizer = Equalizer(100, audioSessionId)
+            equalizer = Equalizer(Int.MAX_VALUE, audioSessionId)
             equalizer?.enabled = true
-            bassBoost = BassBoost(100, audioSessionId)
+            bassBoost = BassBoost(Int.MAX_VALUE, audioSessionId)
             bassBoost?.enabled = true
+            virtualizer = Virtualizer(Int.MAX_VALUE, audioSessionId)
+            virtualizer?.enabled = true
             val bands = (equalizer?.numberOfBands ?: 0).toInt()
             val freqs = List(bands) { i ->
-                try { equalizer?.getCenterFreq(i.toShort())?.toInt() ?: 0 } catch (e: Exception) { 0 }
+                try { equalizer?.getCenterFreq(i.toShort())?.toInt() ?: 0 } catch (_: Exception) { 0 }
             }
             _bandFrequencies.value = freqs
             applyPreset(_currentPreset.value)
@@ -90,7 +99,7 @@ class EqualizerManager {
                 _currentPreset.value = PRESET_CUSTOM
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("EqualizerManager", "setBandLevel failed", e)
         }
     }
 
@@ -115,7 +124,7 @@ class EqualizerManager {
                 setBandLevel(i, taken[i])
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("EqualizerManager", "loadCustomBands failed", e)
         }
     }
 
@@ -136,77 +145,98 @@ class EqualizerManager {
                 PRESET_NORMAL -> {
                     for (i in 0 until bands) eq.setBandLevel(i.toShort(), 0)
                     bb.setStrength(0)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_BASS_BOOST -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 250 -> 600
-                            centers[i] < 500 -> 300
+                            centers[i] < 250 -> 300
+                            centers[i] < 500 -> 150
                             else -> 0
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
-                    bb.setStrength(500)
+                    bb.setStrength(200)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_ROCK -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 250 -> 500
-                            centers[i] < 2000 -> 200
-                            centers[i] < 8000 -> 400
-                            else -> 300
+                            centers[i] < 250 -> 250
+                            centers[i] < 2000 -> 100
+                            centers[i] < 8000 -> 200
+                            else -> 150
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
-                    bb.setStrength(250)
+                    bb.setStrength(100)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_POP -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 250 -> 200
-                            centers[i] < 4000 -> 300
-                            else -> 400
+                            centers[i] < 250 -> 100
+                            centers[i] < 4000 -> 150
+                            else -> 200
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
                     bb.setStrength(0)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_JAZZ -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 250 -> 400
-                            centers[i] < 4000 -> 200
-                            centers[i] < 8000 -> 300
-                            else -> 100
+                            centers[i] < 250 -> 200
+                            centers[i] < 4000 -> 100
+                            centers[i] < 8000 -> 150
+                            else -> 50
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
-                    bb.setStrength(166)
+                    bb.setStrength(66)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_CLASSICAL -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 250 -> 300
+                            centers[i] < 250 -> 150
                             centers[i] < 2000 -> 0
-                            centers[i] < 8000 -> 200
-                            else -> 400
+                            centers[i] < 8000 -> 100
+                            else -> 200
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
                     bb.setStrength(0)
+                    virtualizer?.setStrength(0)
                 }
                 PRESET_GAMER -> {
                     for (i in 0 until bands) {
                         val level = when {
-                            centers[i] < 100 -> 800
-                            centers[i] < 500 -> 500
-                            centers[i] < 2000 -> 300
-                            centers[i] < 8000 -> 200
-                            else -> 100
+                            centers[i] < 100 -> 350
+                            centers[i] < 500 -> 250
+                            centers[i] < 2000 -> 150
+                            centers[i] < 8000 -> 100
+                            else -> 50
                         }
                         eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
                     }
-                    bb.setStrength(333)
+                    bb.setStrength(300)
+                    virtualizer?.setStrength(800)
+                }
+                PRESET_CLARITY -> {
+                    for (i in 0 until bands) {
+                        val level = when {
+                            centers[i] < 200 -> 200
+                            centers[i] < 500 -> 100
+                            centers[i] < 2000 -> 250
+                            centers[i] < 6000 -> 300
+                            else -> 200
+                        }
+                        eq.setBandLevel(i.toShort(), level.coerceIn(minDb, maxDb).toShort())
+                    }
+                    bb.setStrength(50)
+                    virtualizer?.setStrength(0)
                 }
             }
 
@@ -215,7 +245,7 @@ class EqualizerManager {
             }
             _bandLevels.value = levels
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("EqualizerManager", "applyPreset failed", e)
         }
     }
 
@@ -223,11 +253,13 @@ class EqualizerManager {
         try {
             equalizer?.release()
             bassBoost?.release()
+            virtualizer?.release()
         } catch (e: Exception) {
             android.util.Log.e("EqualizerManager", "Error releasing audio effects", e)
         }
         equalizer = null
         bassBoost = null
+        virtualizer = null
         currentAudioSession = -1
     }
 }

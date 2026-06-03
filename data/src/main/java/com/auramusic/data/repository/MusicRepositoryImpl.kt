@@ -1,5 +1,6 @@
 package com.auramusic.data.repository
 
+import android.util.Log
 import com.auramusic.data.local.dao.AlbumInfo
 import com.auramusic.data.local.dao.PlaylistDao
 import com.auramusic.data.local.dao.PlaylistWithCount
@@ -26,7 +27,7 @@ class MusicRepositoryImpl(
         try {
             songDao.getSongById(songId).map { it?.toDomain() }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getSongById failed", e)
             emptyFlow()
         }
 
@@ -34,7 +35,7 @@ class MusicRepositoryImpl(
         try {
             songDao.getSongByIdOnce(songId)?.toDomain()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getSongByIdOnce failed", e)
             null
         }
 
@@ -47,18 +48,18 @@ class MusicRepositoryImpl(
                 entities.mapNotNull { it.toDomain() }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "searchSongs failed", e)
             emptyFlow()
         }
 
     override fun getAllArtists(): Flow<List<String>> =
         try {
             songDao.getAllArtists().catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "getAllArtists flow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getAllArtists failed", e)
             emptyFlow()
         }
 
@@ -76,11 +77,11 @@ class MusicRepositoryImpl(
                     }
                 }
             }.catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "getAllAlbums flow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getAllAlbums failed", e)
             emptyFlow()
         }
 
@@ -100,7 +101,7 @@ class MusicRepositoryImpl(
         try {
             songDao.updateFavorite(songId, isFavorite)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "toggleFavorite failed", e)
         }
     }
 
@@ -108,7 +109,7 @@ class MusicRepositoryImpl(
         try {
             songDao.incrementPlayCount(songId)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "incrementPlayCount failed", e)
         }
     }
 
@@ -117,7 +118,7 @@ class MusicRepositoryImpl(
             if (songs.isEmpty()) return
             songDao.insertSongs(songs.mapNotNull { it.toEntityOrNull() })
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "scanAndInsertSongs failed", e)
         }
     }
 
@@ -125,7 +126,7 @@ class MusicRepositoryImpl(
         try {
             songDao.deleteSongById(songId)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "deleteSong failed", e)
         }
     }
 
@@ -133,7 +134,7 @@ class MusicRepositoryImpl(
         try {
             songDao.clearAll()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "clearAllSongs failed", e)
         }
     }
 
@@ -142,11 +143,11 @@ class MusicRepositoryImpl(
             playlistDao.getAllPlaylistsWithCount().map { rows ->
                 rows.map { it.toDomain() }
             }.catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "getAllPlaylists flow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getAllPlaylists failed", e)
             emptyFlow()
         }
 
@@ -156,7 +157,7 @@ class MusicRepositoryImpl(
                 row?.toDomain()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getPlaylistById failed", e)
             emptyFlow()
         }
 
@@ -164,7 +165,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.getPlaylistByIdOnceWithCount(id)?.toDomain()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getPlaylistByIdOnce failed", e)
             null
         }
 
@@ -173,7 +174,7 @@ class MusicRepositoryImpl(
             val entity = PlaylistEntity(name = name, description = description)
             playlistDao.createPlaylist(entity)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "createPlaylist failed", e)
             -1L
         }
     }
@@ -182,7 +183,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.updatePlaylist(playlist.toEntity())
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "updatePlaylist failed", e)
         }
     }
 
@@ -191,7 +192,7 @@ class MusicRepositoryImpl(
             playlistDao.clearPlaylist(id)
             playlistDao.deletePlaylistById(id)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "deletePlaylist failed", e)
         }
     }
 
@@ -204,7 +205,7 @@ class MusicRepositoryImpl(
             val entity = PlaylistSongEntity(playlistId = playlistId, songId = songId, position = count)
             playlistDao.addSongToPlaylist(entity)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "addSongToPlaylist failed", e)
         }
     }
 
@@ -212,7 +213,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.removeSongFromPlaylistById(playlistId, songId)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "removeSongFromPlaylist failed", e)
         }
     }
 
@@ -220,7 +221,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.isSongInPlaylist(playlistId, songId)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "isSongInPlaylist failed", e)
             false
         }
 
@@ -228,7 +229,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.getPlaylistSongCount(playlistId)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getPlaylistSongCount failed", e)
             0
         }
 
@@ -236,7 +237,7 @@ class MusicRepositoryImpl(
         try {
             playlistDao.reorderPlaylistSongs(playlistId, songIds)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "reorderPlaylistSongs failed", e)
         }
     }
 
@@ -244,18 +245,18 @@ class MusicRepositoryImpl(
         try {
             playlistDao.updatePlaylistName(id, name, description)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "updatePlaylistName failed", e)
         }
     }
 
     override fun getAllGenres(): Flow<List<String>> =
         try {
             songDao.getAllGenres().catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "getAllGenres flow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getAllGenres failed", e)
             emptyFlow()
         }
 
@@ -275,11 +276,11 @@ class MusicRepositoryImpl(
                     } catch (e: Exception) { null }
                 }.distinct().filterNotNull().sorted()
             }.catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "getAllFolders flow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getAllFolders failed", e)
             emptyFlow()
         }
 
@@ -289,7 +290,7 @@ class MusicRepositoryImpl(
                 entities.mapNotNull { it.toDomain() }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "getSongsByPathPrefix failed", e)
             emptyFlow()
         }
 
@@ -299,7 +300,7 @@ class MusicRepositoryImpl(
                 rows.map { it.toDomain() }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "searchPlaylists failed", e)
             emptyFlow()
         }
 
@@ -315,11 +316,11 @@ class MusicRepositoryImpl(
                         }
                     } catch (e: Exception) { null }
                 }.distinct().filter {
-                    it != null && it.contains(query, ignoreCase = true)
-                }.filterNotNull().sorted()
+                    it.contains(query, ignoreCase = true)
+                }.sorted()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "searchFolders failed", e)
             emptyFlow()
         }
 
@@ -328,11 +329,11 @@ class MusicRepositoryImpl(
             block().map { entities ->
                 entities.mapNotNull { it.toDomain() }
             }.catch { e ->
-                e.printStackTrace()
+                Log.e("MusicRepo", "safeSongFlow failed", e)
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicRepo", "safeSongFlow block failed", e)
             emptyFlow()
         }
     }
@@ -348,6 +349,7 @@ private fun SongEntity.toDomain() = Song(
     duration = duration,
     path = path,
     size = size,
+    bitrate = bitrate,
     dateAdded = dateAdded,
     dateModified = dateModified,
     trackNumber = trackNumber,
@@ -366,6 +368,7 @@ private fun Song.toEntity() = SongEntity(
     duration = duration,
     path = path,
     size = size,
+    bitrate = bitrate,
     dateAdded = dateAdded,
     dateModified = dateModified,
     trackNumber = trackNumber,
@@ -386,6 +389,7 @@ private fun Song.toEntityOrNull(): SongEntity? {
             duration = duration,
             path = path,
             size = size,
+            bitrate = bitrate,
             dateAdded = dateAdded,
             dateModified = dateModified,
             trackNumber = trackNumber,
@@ -400,8 +404,8 @@ private fun Song.toEntityOrNull(): SongEntity? {
 
 private fun AlbumInfo.toDomain() = Album(
     id = album_id,
-    title = album ?: "Unknown",
-    artist = artist ?: "Unknown Artist"
+    title = album,
+    artist = artist
 )
 
 private fun PlaylistWithCount.toDomain() = Playlist(

@@ -13,14 +13,17 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.auramusic.player.R
+import androidx.media3.session.SessionResult
 import com.auramusic.data.preferences.AppPreferences
 import com.auramusic.player.MusicPlayer
+import com.auramusic.player.R
 import com.auramusic.util.getAlbumArtBitmap
 import com.auramusic.widget.MusicWidgetProvider
 import com.google.common.util.concurrent.Futures
@@ -30,15 +33,16 @@ import kotlinx.coroutines.*
 import javax.inject.Inject
 
 @AndroidEntryPoint
-@UnstableApi
+@OptIn(UnstableApi::class)
 class MusicPlaybackService : MediaSessionService() {
 
     @Inject lateinit var musicPlayer: MusicPlayer
     @Inject lateinit var preferences: AppPreferences
 
     private var mediaSession: MediaSession? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, e -> e.printStackTrace() })
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, e -> Log.e("MusicPlaybackService", "Unhandled coroutine exception", e) })
     private var notificationUpdateJob: Job? = null
+    private var sessionPendingIntent: PendingIntent? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -51,17 +55,16 @@ class MusicPlaybackService : MediaSessionService() {
             }
 
             val sessionCallback = object : MediaSession.Callback {
+                @androidx.media3.common.util.UnstableApi
                 override fun onAddMediaItems(
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
                     mediaItems: List<MediaItem>
                 ): ListenableFuture<List<MediaItem>> {
-                    val result = mediaItems.map { request ->
-                        if (request.mediaId.isNullOrEmpty()) {
-                            request.buildUpon().setMediaId("root").build()
-                        } else {
-                            request
-                        }
+                    val result = mediaItems.map { item ->
+                        if (item.mediaId.isNullOrEmpty()) {
+                            item.buildUpon().setMediaId("root").build()
+                        } else item
                     }
                     return Futures.immediateFuture(result)
                 }
@@ -75,30 +78,44 @@ class MusicPlaybackService : MediaSessionService() {
                         MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS
                     )
                 }
+
+                override fun onPlayerCommandRequest(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    playerCommand: Int
+                ): Int {
+                    try {
+                        if (playerCommand == Player.COMMAND_PLAY_PAUSE) {
+                            val p = musicPlayer.exoPlayer
+                            if (p != null && p.playbackState == Player.STATE_IDLE && p.mediaItemCount > 0) {
+                                p.prepare()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MusicPlaybackService", "onPlayerCommandRequest failed", e)
+                        return SessionResult.RESULT_ERROR_UNKNOWN
+                    }
+                    return SessionResult.RESULT_SUCCESS
+                }
             }
 
             mediaSession = try {
-                val sessionIntent = packageManager?.getLaunchIntentForPackage(packageName)?.apply {
-                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-                } ?: try {
-                    Intent().apply {
-                        component = ComponentName(packageName, "$packageName.MainActivity")
-                    }
-                } catch (e: Exception) {
-                    Log.w("MusicPlaybackService", "Could not create session intent", e)
-                    null
+                val openAppIntent = packageManager.getLaunchIntentForPackage(
+                    packageName
+                )?.apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                } ?: Intent(Intent.ACTION_MAIN).apply {
+                    setPackage(packageName)
+                    addCategory(Intent.CATEGORY_LAUNCHER)
                 }
+                sessionPendingIntent = PendingIntent.getActivity(
+                    this, 0, openAppIntent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+                        PendingIntent.FLAG_IMMUTABLE else 0
+                )
                 val builder = MediaSession.Builder(this, player)
                     .setCallback(sessionCallback)
-                if (sessionIntent != null) {
-                    builder.setSessionActivity(
-                        PendingIntent.getActivity(
-                            this, 0, sessionIntent,
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                                PendingIntent.FLAG_IMMUTABLE else 0
-                        )
-                    )
-                }
+                    .setSessionActivity(sessionPendingIntent!!)
                 builder.build()
             } catch (e: Exception) {
                 Log.e("MusicPlaybackService", "MediaSession creation failed", e)
@@ -120,11 +137,20 @@ class MusicPlaybackService : MediaSessionService() {
             }
             musicPlayer.initMediaSession(session)
             createNotificationChannel()
+
+            val currentSong = musicPlayer.currentSong.value
+            val initialTitle = currentSong?.title
+            val initialArtist = currentSong?.artistDisplay
+
             try {
-                startForeground(NOTIFICATION_ID, buildNotification(null, null, null))
+                startForeground(NOTIFICATION_ID, buildNotification(initialTitle, initialArtist, null))
             } catch (e: Exception) {
                 Log.e("MusicPlaybackService", "startForeground failed", e)
             }
+
+            lastNotificationSongId = currentSong?.id ?: -1L
+            lastNotificationIsPlaying = musicPlayer.isPlaying.value
+
             startPositionUpdates()
         } catch (e: Exception) {
             Log.e("MusicPlaybackService", "Service onCreate failed", e)
@@ -140,9 +166,16 @@ class MusicPlaybackService : MediaSessionService() {
                 ACTION_PLAY_PAUSE -> musicPlayer.togglePlayPause()
                 ACTION_NEXT -> musicPlayer.playNext()
                 ACTION_PREVIOUS -> musicPlayer.playPrevious()
+                ACTION_OPEN_APP -> {
+                    val openIntent = packageManager.getLaunchIntentForPackage(packageName)
+                    if (openIntent != null) {
+                        openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        startActivity(openIntent)
+                    }
+                }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicPlaybackService", "onStartCommand failed", e)
         }
         return START_NOT_STICKY
     }
@@ -154,7 +187,7 @@ class MusicPlaybackService : MediaSessionService() {
                 stopSelf()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicPlaybackService", "onTaskRemoved failed", e)
             stopSelf()
         }
     }
@@ -165,6 +198,7 @@ class MusicPlaybackService : MediaSessionService() {
         musicPlayer.releaseMediaSession()
         mediaSession?.release()
         mediaSession = null
+        musicPlayer.release()
         super.onDestroy()
     }
 
@@ -181,7 +215,7 @@ class MusicPlaybackService : MediaSessionService() {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicPlaybackService", "createNotificationChannel failed", e)
         }
     }
 
@@ -219,7 +253,8 @@ class MusicPlaybackService : MediaSessionService() {
                 .setOngoing(isPlaying)
                 .setShowWhen(false)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setContentIntent(sessionPendingIntent)
                 .addAction(
                     NotificationCompat.Action(
                         0, getString(R.string.previous_action),
@@ -248,13 +283,13 @@ class MusicPlaybackService : MediaSessionService() {
                     if (session != null) {
                         setStyle(
                             MediaStyleNotificationHelper.MediaStyle(session)
-                                .setShowActionsInCompactView(0, 1, 2)
+                                .setShowActionsInCompactView(0, 1, 2) // Previous, Play/Pause, Next
                         )
                     }
                 }
                 .build()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MusicPlaybackService", "buildNotification failed", e)
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_splash_logo)
                 .setContentTitle(getString(R.string.app_name))
@@ -306,9 +341,11 @@ class MusicPlaybackService : MediaSessionService() {
                     val playbackChanged = isPlaying != lastNotificationIsPlaying
 
                     if (songChanged or playbackChanged) {
+                        var albumArtBitmap: Bitmap? = null
+
                         try {
                             if (song != null) {
-                                val bitmap = try {
+                                albumArtBitmap = try {
                                     withContext(Dispatchers.IO) {
                                         this@MusicPlaybackService.getAlbumArtBitmap(song.albumId)
                                     }
@@ -316,7 +353,7 @@ class MusicPlaybackService : MediaSessionService() {
                                     Log.e("MusicPlaybackService", "Error getting album art", e)
                                     null
                                 }
-                                val notification = buildNotification(song.title, song.artistDisplay, bitmap)
+                                val notification = buildNotification(song.title, song.artistDisplay, albumArtBitmap)
                                 val manager = try {
                                     getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                                 } catch (e: Exception) {
@@ -346,7 +383,7 @@ class MusicPlaybackService : MediaSessionService() {
                                             song?.title,
                                             song?.artistDisplay,
                                             isPlaying,
-                                            song?.albumId ?: -1L
+                                            albumArtBitmap
                                         )
                                     } catch (e: Exception) {
                                         Log.e("MusicPlaybackService", "Error updating widget $id", e)
@@ -355,6 +392,8 @@ class MusicPlaybackService : MediaSessionService() {
                             }
                         } catch (e: Exception) {
                             Log.e("MusicPlaybackService", "Error updating widgets", e)
+                        } finally {
+                            albumArtBitmap?.recycle()
                         }
                     }
 
@@ -373,5 +412,6 @@ class MusicPlaybackService : MediaSessionService() {
         const val ACTION_NEXT = "com.auramusic.NEXT"
         const val ACTION_PREVIOUS = "com.auramusic.PREVIOUS"
         const val ACTION_CLOSE = "com.auramusic.CLOSE"
+        const val ACTION_OPEN_APP = "com.auramusic.OPEN_APP"
     }
 }

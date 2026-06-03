@@ -28,4 +28,6 @@ sealed class Routes(val route: String) {
     data object FolderSongs : Routes("folder_songs/{folderPath}") {
         fun createRoute(folderPath: String) = "folder_songs/${Uri.encode(folderPath)}"
     }
+    data object Onboarding : Routes("onboarding")
+    data object History : Routes("history")
 }

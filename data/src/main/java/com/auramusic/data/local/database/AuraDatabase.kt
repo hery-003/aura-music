@@ -48,6 +48,7 @@ abstract class AuraDatabase : RoomDatabase() {
                         Log.i("AuraDatabase", "Database created")
                     }
                 })
+                .fallbackToDestructiveMigration(false)
                 .build()
         }
 

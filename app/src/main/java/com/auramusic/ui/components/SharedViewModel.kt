@@ -4,10 +4,13 @@ import android.annotation.SuppressLint
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.MediaStore
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
 import com.auramusic.data.preferences.AppPreferences
+import com.auramusic.data.serialization.PlaylistSerializer
+import com.auramusic.data.serialization.ExportedPlaylist
 import com.auramusic.domain.model.Playlist
 import com.auramusic.domain.model.Song
 import com.auramusic.domain.repository.MusicRepository
@@ -21,6 +24,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -33,7 +37,7 @@ class SharedViewModel @Inject constructor(
     private val getSongsByArtistUseCase: GetSongsByArtistUseCase,
     private val scanMusicUseCase: ScanMusicUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _isScanning = MutableStateFlow(false)
@@ -47,7 +51,7 @@ class SharedViewModel @Inject constructor(
     }
 
     val songs: StateFlow<List<Song>> = repository.getAllSongs()
-        .catch { e -> e.printStackTrace(); emit(emptyList()) }
+        .catch { e -> Timber.e(e, "Failed to get songs"); emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val favoriteSongs: StateFlow<List<Song>> = safeFlow { repository.getFavoriteSongs() }
@@ -98,7 +102,7 @@ class SharedViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Failed to restore state")
             }
         }
     }
@@ -107,10 +111,10 @@ class SharedViewModel @Inject constructor(
         return try {
             block()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "safeFlow block failed")
             emptyFlow()
         }.catch { e ->
-            e.printStackTrace()
+            Timber.e(e, "safeFlow catch failed")
         }
     }
 
@@ -127,7 +131,7 @@ class SharedViewModel @Inject constructor(
                 val updatedSongs = scanMusicUseCase(existingSongs)
                 repository.scanAndInsertSongs(updatedSongs)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "scanMusic failed")
             } finally {
                 _isScanning.value = false
             }
@@ -139,10 +143,27 @@ class SharedViewModel @Inject constructor(
             musicPlayer.playSong(song)
             startPlaybackService()
             viewModelScope.launch {
-                try { repository.incrementPlayCount(song.id) } catch (e: Exception) { e.printStackTrace() }
+                try { repository.incrementPlayCount(song.id) } catch (e: Exception) { Timber.e(e, "Failed to increment play count") }
             }
         } catch (e: Exception) {
-            android.util.Log.e("SharedViewModel", "playSong failed", e)
+            Timber.e(e, "playSong failed")
+        }
+    }
+
+    fun playSongNext(song: Song) {
+        try {
+            musicPlayer.playSongNext(song)
+            startPlaybackService()
+        } catch (e: Exception) {
+            Timber.e(e, "playSongNext failed")
+        }
+    }
+
+    fun addToQueue(song: Song) {
+        try {
+            musicPlayer.addToQueue(song)
+        } catch (e: Exception) {
+            Timber.e(e, "addToQueue failed")
         }
     }
 
@@ -152,7 +173,7 @@ class SharedViewModel @Inject constructor(
             val intent = Intent(context, MusicPlaybackService::class.java)
             context.startForegroundService(intent)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "startPlaybackService failed")
         }
     }
 
@@ -161,7 +182,7 @@ class SharedViewModel @Inject constructor(
             try {
                 toggleFavoriteUseCase(song.id, !song.isFavorite)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "toggleFavorite failed")
             }
         }
     }
@@ -179,7 +200,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.createPlaylist(name, description)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "createPlaylist failed")
             }
         }
     }
@@ -189,7 +210,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.deletePlaylist(playlistId)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "deletePlaylist failed")
                 _errorMessage.value = context.getString(com.auramusic.R.string.error_delete_playlist)
             }
         }
@@ -200,7 +221,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.updatePlaylistName(playlistId, name, description)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "updatePlaylistName failed")
             }
         }
     }
@@ -210,7 +231,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.addSongToPlaylist(playlistId, songId)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "addSongToPlaylist failed")
             }
         }
     }
@@ -220,7 +241,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.removeSongFromPlaylist(playlistId, songId)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "removeSongFromPlaylist failed")
                 _errorMessage.value = context.getString(com.auramusic.R.string.error_remove_song)
             }
         }
@@ -231,7 +252,7 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.deleteSong(songId)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "deleteSongFromDb failed")
                 _errorMessage.value = context.getString(com.auramusic.R.string.error_delete_song)
             }
         }
@@ -240,21 +261,34 @@ class SharedViewModel @Inject constructor(
     fun deleteSong(song: Song) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val file = java.io.File(song.path)
-                var fileDeleted = false
-                if (file.exists()) {
-                    fileDeleted = file.delete()
+                var deleted = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                        } else {
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                        }
+                        val uri = ContentUris.withAppendedId(collection, song.id)
+                        deleted = context.contentResolver.delete(uri, null, null) > 0
+                    } catch (e: Exception) {
+                        Timber.e(e, "MediaStore delete failed")
+                    }
                 }
-                if (!fileDeleted) {
-                    val contentUri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        song.id
-                    )
-                    context.contentResolver.delete(contentUri, null, null)
+                if (!deleted) {
+                    val file = java.io.File(song.path)
+                    if (file.exists()) {
+                        deleted = file.delete()
+                    }
                 }
-                repository.deleteSong(song.id)
+                if (deleted) {
+                    repository.deleteSong(song.id)
+                } else {
+                    Timber.w("Could not delete file for song: ${song.id}, removing from DB anyway")
+                    repository.deleteSong(song.id)
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "deleteSong failed")
                 _errorMessage.value = context.getString(com.auramusic.R.string.error_delete_song)
             }
         }
@@ -265,83 +299,83 @@ class SharedViewModel @Inject constructor(
             try {
                 repository.reorderPlaylistSongs(playlistId, songIds)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "reorderPlaylistSongs failed")
             }
         }
     }
 
     fun searchSongs(query: String): Flow<List<Song>> {
         viewModelScope.launch {
-            try { preferences.addSearchQuery(query) } catch (e: Exception) { e.printStackTrace() }
+            try { preferences.addSearchQuery(query) } catch (e: Exception) { Timber.e(e, "addSearchQuery failed") }
         }
         return try {
             repository.searchSongs(query).catch { e ->
-                e.printStackTrace()
+                Timber.e(e, "searchSongs flow failed")
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "searchSongs failed")
             emptyFlow()
         }
     }
 
     fun searchPlaylists(query: String): Flow<List<Playlist>> {
         viewModelScope.launch {
-            try { preferences.addSearchQuery(query) } catch (e: Exception) { e.printStackTrace() }
+            try { preferences.addSearchQuery(query) } catch (e: Exception) { Timber.e(e, "addSearchQuery failed") }
         }
         return try {
             repository.searchPlaylists(query).catch { e ->
-                e.printStackTrace()
+                Timber.e(e, "searchPlaylists flow failed")
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "searchPlaylists failed")
             emptyFlow()
         }
     }
 
     fun searchFolders(query: String): Flow<List<String>> {
         viewModelScope.launch {
-            try { preferences.addSearchQuery(query) } catch (e: Exception) { e.printStackTrace() }
+            try { preferences.addSearchQuery(query) } catch (e: Exception) { Timber.e(e, "addSearchQuery failed") }
         }
         return try {
             repository.searchFolders(query).catch { e ->
-                e.printStackTrace()
+                Timber.e(e, "searchFolders flow failed")
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "searchFolders failed")
             emptyFlow()
         }
     }
 
     fun clearSearchHistory() {
         viewModelScope.launch {
-            try { preferences.clearSearchHistory() } catch (e: Exception) { e.printStackTrace() }
+            try { preferences.clearSearchHistory() } catch (e: Exception) { Timber.e(e, "clearSearchHistory failed") }
         }
     }
 
     fun setEqualizerPreset(preset: Int) {
         try {
             musicPlayer.equalizerManager.setPreset(preset)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "setEqualizerPreset failed") }
         viewModelScope.launch {
             try {
                 preferences.setEqualizerPreset(preset)
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) { Timber.e(e, "Failed to save eq preset") }
         }
     }
 
     fun setCustomEqualizerBand(bandIndex: Int, levelMillibels: Short) {
         try {
             musicPlayer.equalizerManager.setBandLevel(bandIndex, levelMillibels)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "setCustomEqualizerBand failed") }
         viewModelScope.launch {
             try {
                 preferences.setEqualizerPreset(EqualizerManager.PRESET_CUSTOM)
                 val bands = musicPlayer.equalizerManager.exportCustomBands()
                 preferences.setCustomEqBands(bands)
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) { Timber.e(e, "Failed to save custom eq bands") }
         }
     }
 
@@ -353,7 +387,7 @@ class SharedViewModel @Inject constructor(
                         musicPlayer.equalizerManager.loadCustomBands(csv)
                     }
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) { Timber.e(e, "loadCustomEqualizerBands failed") }
         }
     }
 
@@ -363,37 +397,98 @@ class SharedViewModel @Inject constructor(
             try {
                 preferences.setCrossfadeEnabled(enabled)
                 preferences.setCrossfadeDuration(durationSec)
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) { Timber.e(e, "Failed to save crossfade prefs") }
         }
     }
 
     fun startSleepTimer(minutes: Int) {
         try {
             musicPlayer.sleepTimerManager.start(minutes)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "startSleepTimer failed") }
     }
 
     fun stopSleepTimer() {
         try {
             musicPlayer.sleepTimerManager.stop()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "stopSleepTimer failed") }
     }
 
     fun addTimeToSleepTimer(minutes: Int) {
         try {
             musicPlayer.sleepTimerManager.addTime(minutes)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "addTimeToSleepTimer failed") }
     }
 
     fun setAudioQuality(quality: Int) {
         viewModelScope.launch {
-            try { preferences.setAudioQuality(quality) } catch (e: Exception) { e.printStackTrace() }
+            try {
+                preferences.setAudioQuality(quality)
+                musicPlayer.setAudioQuality(quality == AppPreferences.AUDIO_QUALITY_HIGH)
+            } catch (e: Exception) { Timber.e(e, "setAudioQuality failed") }
         }
     }
 
     fun setAnimationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            try { preferences.setAnimationsEnabled(enabled) } catch (e: Exception) { e.printStackTrace() }
+            try { preferences.setAnimationsEnabled(enabled) } catch (e: Exception) { Timber.e(e, "setAnimationsEnabled failed") }
+        }
+    }
+
+    fun exportPlaylist(context: android.content.Context, playlistId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val playlist = repository.getPlaylistByIdOnce(playlistId) ?: return@launch
+                val songs = repository.getPlaylistSongs(playlistId).first()
+                val json = PlaylistSerializer.exportToJson(playlist, songs)
+                val file = java.io.File(
+                    context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    "${playlist.name}.json"
+                )
+                file.writeText(json)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    ))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, context.getString(com.auramusic.R.string.export_playlist)))
+            } catch (e: Exception) {
+                Timber.e(e, "exportPlaylist failed")
+                _errorMessage.value = context.getString(com.auramusic.R.string.error_export_playlist)
+            }
+        }
+    }
+
+    fun importPlaylist(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val json = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader().readText()
+                } ?: return@launch
+                val exported = PlaylistSerializer.importFromJson(json) ?: run {
+                    _errorMessage.value = context.getString(com.auramusic.R.string.error_import_playlist)
+                    return@launch
+                }
+                val playlistId = repository.createPlaylist(exported.name, exported.description)
+                val allSongs = repository.getAllSongs().first()
+                exported.songs.forEach { info ->
+                    val match = allSongs.find { song ->
+                        song.title.equals(info.title, ignoreCase = true) &&
+                        song.artist.equals(info.artist, ignoreCase = true) &&
+                        song.album.equals(info.album, ignoreCase = true)
+                    }
+                    if (match != null) {
+                        repository.addSongToPlaylist(playlistId, match.id)
+                    }
+                }
+                _errorMessage.value = context.getString(com.auramusic.R.string.playlist_imported)
+            } catch (e: Exception) {
+                Timber.e(e, "importPlaylist failed")
+                _errorMessage.value = context.getString(com.auramusic.R.string.error_import_playlist)
+            }
         }
     }
 
@@ -411,7 +506,7 @@ class SharedViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.addSongToPlaylist(playlistId, songId)
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) { Timber.e(e, "confirmAddToPlaylist failed") }
         }
     }
 }

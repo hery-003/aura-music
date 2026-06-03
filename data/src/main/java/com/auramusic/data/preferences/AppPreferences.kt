@@ -1,6 +1,7 @@
 package com.auramusic.data.preferences
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,12 +33,16 @@ class AppPreferences(private val context: Context) {
         private val CUSTOM_EQ_BANDS = stringPreferencesKey("custom_eq_bands")
         private val AUDIO_QUALITY = intPreferencesKey("audio_quality")
         private val ANIMATIONS_ENABLED = booleanPreferencesKey("animations_enabled")
+        private val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
+        private val ONBOARDING_SHOWN = booleanPreferencesKey("onboarding_shown")
+        private val QUEUE_JSON = stringPreferencesKey("queue_json")
         private val SEARCH_HISTORY = stringPreferencesKey("search_history")
 
         const val THEME_AMOLED = 0
         const val THEME_NEON = 1
         const val THEME_DYNAMIC = 2
         const val THEME_MONET = 3
+        const val THEME_LIGHT = 4
 
         const val REPEAT_NONE = 0
         const val REPEAT_ALL = 1
@@ -49,7 +54,7 @@ class AppPreferences(private val context: Context) {
 
     private val dataStoreFlow: Flow<Preferences> = context.dataStore.data
         .catch { e ->
-            e.printStackTrace()
+            Log.e("AppPreferences", "DataStore error", e)
             emit(emptyPreferences())
         }
 
@@ -71,10 +76,31 @@ class AppPreferences(private val context: Context) {
     val customEqBands: Flow<String> = dataStoreFlow.map { it[CUSTOM_EQ_BANDS] ?: "" }
     val audioQuality: Flow<Int> = dataStoreFlow.map { it[AUDIO_QUALITY] ?: AUDIO_QUALITY_NORMAL }
     val animationsEnabled: Flow<Boolean> = dataStoreFlow.map { it[ANIMATIONS_ENABLED] ?: true }
+    val playbackSpeed: Flow<Float> = dataStoreFlow.map { it[PLAYBACK_SPEED] ?: 1f }
+
+    suspend fun setPlaybackSpeed(speed: Float) {
+        context.dataStore.edit { it[PLAYBACK_SPEED] = speed }
+    }
+
+    val onboardingShown: Flow<Boolean> = dataStoreFlow.map { it[ONBOARDING_SHOWN] ?: false }
+
+    suspend fun setOnboardingShown() {
+        context.dataStore.edit { it[ONBOARDING_SHOWN] = true }
+    }
+
+    val queueJson: Flow<String> = dataStoreFlow.map { it[QUEUE_JSON] ?: "" }
+
+    suspend fun saveQueueJson(json: String) {
+        context.dataStore.edit { it[QUEUE_JSON] = json }
+    }
+
     val searchHistory: Flow<List<String>> = dataStoreFlow.map { prefs ->
         val raw = prefs[SEARCH_HISTORY] ?: ""
         if (raw.isBlank()) emptyList()
-        else try { (0 until JSONArray(raw).length()).map { JSONArray(raw).getString(it) } } catch (e: Exception) { emptyList() }
+        else try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.getString(it) }
+            } catch (e: Exception) { emptyList() }
     }
 
     suspend fun addSearchQuery(query: String) {
@@ -82,7 +108,10 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             val raw = prefs[SEARCH_HISTORY] ?: ""
             val existing = if (raw.isBlank()) emptyList()
-            else try { (0 until JSONArray(raw).length()).map { JSONArray(raw).getString(it) } } catch (e: Exception) { emptyList() }
+            else try {
+                    val arr = JSONArray(raw)
+                    (0 until arr.length()).map { arr.getString(it) }
+                } catch (e: Exception) { emptyList() }
             val updated = (listOf(query) + existing).distinct().take(10)
             prefs[SEARCH_HISTORY] = JSONArray(updated).toString()
         }

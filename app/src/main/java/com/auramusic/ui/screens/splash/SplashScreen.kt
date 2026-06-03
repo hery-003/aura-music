@@ -17,13 +17,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auramusic.R
@@ -169,9 +171,11 @@ fun SplashScreen(
         label = "bottom_line_alpha"
     )
 
-    val screenConfig = LocalConfiguration.current
-    val screenWidthDp = screenConfig.screenWidthDp.dp
-    val screenHeightDp = screenConfig.screenHeightDp.dp
+    val windowInfo = LocalWindowInfo.current
+    val density = LocalDensity.current
+    val containerSize = windowInfo.containerSize
+    val screenWidthDp = with(density) { containerSize.width.toDp() }
+    val screenHeightDp = with(density) { containerSize.height.toDp() }
 
     var currentWaitForPermissions by remember { mutableStateOf(waitForPermissions) }
     LaunchedEffect(waitForPermissions) {
@@ -424,7 +428,7 @@ fun SplashScreen(
                     )
                 ),
                 modifier = Modifier
-                    .offset(y = titleOffset.value.dp)
+                    .offset { IntOffset(0, titleOffset.value.dp.roundToPx()) }
                     .alpha(titleAlpha.value)
             )
 
@@ -438,7 +442,7 @@ fun SplashScreen(
                 color = Color(0xFFA898C8),
                 letterSpacing = 10.sp,
                 modifier = Modifier
-                    .offset(y = subtitleOffset.value.dp)
+                    .offset { IntOffset(0, subtitleOffset.value.dp.roundToPx()) }
                     .alpha(subtitleAlpha.value)
             )
 

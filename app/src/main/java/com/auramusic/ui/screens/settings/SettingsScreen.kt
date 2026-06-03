@@ -1,11 +1,11 @@
 package com.auramusic.ui.screens.settings
 
 import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,7 +15,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
@@ -24,12 +23,20 @@ import com.auramusic.data.preferences.AppPreferences
 import com.auramusic.player.EqualizerManager
 
 import com.auramusic.ui.components.NeonDivider
-import androidx.compose.material3.MaterialTheme
 import com.auramusic.ui.theme.*
+import android.Manifest
+import android.content.Intent
+import android.util.Log
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.content.pm.PackageManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     themeMode: Int,
@@ -41,6 +48,8 @@ fun SettingsScreen(
     accentColor: Long,
     audioQuality: Int = AppPreferences.AUDIO_QUALITY_NORMAL,
     animationsEnabled: Boolean = true,
+    playbackSpeed: Float = 1f,
+    onPlaybackSpeedChange: (Float) -> Unit = {},
     sleepTimerActive: Boolean = false,
     customEqBands: List<Float> = emptyList(),
     bandFrequencies: List<Int> = emptyList(),
@@ -58,6 +67,7 @@ fun SettingsScreen(
     onRescan: () -> Unit,
     onBack: () -> Unit,
     onStatistics: () -> Unit = {},
+    onHistory: () -> Unit = {},
     onSleepTimerStart: (Int) -> Unit = {},
     onSleepTimerStop: () -> Unit = {}
 ) {
@@ -73,7 +83,7 @@ fun SettingsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, stringResource(R.string.back), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -89,7 +99,7 @@ fun SettingsScreen(
                 .padding(padding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            item {
+            item(key = "theme") {
                 SettingsLabel(stringResource(R.string.theme))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -102,7 +112,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "equalizer") {
                 SettingsLabel(stringResource(R.string.equalizer))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -122,7 +132,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "crossfade") {
                 SettingsLabel(stringResource(R.string.crossfade))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -135,7 +145,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "visualizer") {
                 SettingsLabel(stringResource(R.string.visualizer))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -146,7 +156,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "audio") {
                 SettingsLabel(stringResource(R.string.audio))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -162,7 +172,18 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "playback_speed") {
+                SettingsLabel(stringResource(R.string.playback_speed))
+                NeonDivider()
+                Spacer(Modifier.height(12.dp))
+                PlaybackSpeedSection(
+                    speed = playbackSpeed,
+                    onChange = onPlaybackSpeedChange
+                )
+                Spacer(Modifier.height(24.dp))
+            }
+
+            item(key = "sleep_timer") {
                 SettingsLabel(stringResource(R.string.sleep_timer))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -174,7 +195,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "gamer_mode") {
                 SettingsLabel(stringResource(R.string.gamer_mode))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -185,15 +206,25 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "permissions") {
+                SettingsLabel(stringResource(R.string.permissions))
+                NeonDivider()
+                Spacer(Modifier.height(12.dp))
+                PermissionSection()
+                Spacer(Modifier.height(24.dp))
+            }
+
+            item(key = "statistics") {
                 SettingsLabel(stringResource(R.string.statistics))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
                 StatisticsButton(onStatistics = onStatistics)
+                Spacer(Modifier.height(12.dp))
+                HistoryButton(onHistory = onHistory)
                 Spacer(Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "storage") {
                 SettingsLabel(stringResource(R.string.storage))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
@@ -224,7 +255,8 @@ private fun ThemeSelector(
         Triple(stringResource(R.string.amoled), AppPreferences.THEME_AMOLED, Icons.Rounded.DarkMode),
         Triple(stringResource(R.string.neon), AppPreferences.THEME_NEON, Icons.Rounded.Nightlight),
         Triple(stringResource(R.string.dynamic), AppPreferences.THEME_DYNAMIC, Icons.Rounded.AutoAwesome),
-        Triple(stringResource(R.string.monet), AppPreferences.THEME_MONET, Icons.Rounded.Palette)
+        Triple(stringResource(R.string.monet), AppPreferences.THEME_MONET, Icons.Rounded.Palette),
+        Triple(stringResource(R.string.light), AppPreferences.THEME_LIGHT, Icons.Rounded.LightMode)
     )
 
     Row(
@@ -265,7 +297,6 @@ private fun ThemeSelector(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EqualizerSelector(
     selectedPreset: Int,
@@ -279,7 +310,8 @@ private fun EqualizerSelector(
         stringResource(R.string.jazz) to 4,
         stringResource(R.string.classical) to 5,
         stringResource(R.string.gamer) to 6,
-        stringResource(R.string.custom) to 7
+        stringResource(R.string.custom) to 7,
+        stringResource(R.string.clarity) to 8
     )
 
     FlowRow(
@@ -364,16 +396,16 @@ private fun EqualizerSliders(
 
                 Spacer(Modifier.height(4.dp))
 
-                val sliderValue = remember(level) { mutableFloatStateOf(normalized) }
+                val sliderValue = remember(index, normalized) { mutableFloatStateOf(normalized) }
 
                 Box(
                     modifier = Modifier.size(24.dp, 140.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Slider(
-                        value = sliderValue.value,
+                        value = sliderValue.floatValue,
                         onValueChange = { newVal ->
-                            sliderValue.value = newVal
+                            sliderValue.floatValue = newVal
                             val newLevel = (minLevel + newVal * (maxLevel - minLevel)).roundToInt()
                                 .coerceIn(minLevel.toInt(), maxLevel.toInt())
                             onBandLevelChange(index, newLevel.toShort())
@@ -736,6 +768,90 @@ private fun GamerModeSection(
 }
 
 @Composable
+private fun PlaybackSpeedSection(
+    speed: Float,
+    onChange: (Float) -> Unit
+) {
+    val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        speeds.forEach { s ->
+            val selected = speed == s
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onChange(s) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${s}x",
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionSection() {
+    val context = LocalContext.current
+    val audioGranted = ContextCompat.checkSelfPermission(
+        context,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+    ) == PackageManager.PERMISSION_GRANTED
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = if (audioGranted) Color(0xFF06D6A0) else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = stringResource(if (audioGranted) R.string.permission_audio_granted else R.string.permission_audio_denied),
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        if (!audioGranted) {
+            OutlinedButton(
+                onClick = {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e("SettingsScreen", "Failed to open settings", e)
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.open_app_settings), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.open_app_settings))
+            }
+        }
+    }
+}
+
+@Composable
 private fun AccentColorPicker(
     selectedColor: Long,
     onColorSelected: (Long) -> Unit
@@ -794,12 +910,38 @@ private fun StatisticsButton(onStatistics: () -> Unit) {
     ) {
         Icon(
             imageVector = Icons.Rounded.BarChart,
-            contentDescription = null,
+            contentDescription = stringResource(R.string.statistics),
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(8.dp))
         Text(
             text = stringResource(R.string.statistics),
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleSmall
+        )
+    }
+}
+
+@Composable
+private fun HistoryButton(onHistory: () -> Unit) {
+    Button(
+        onClick = onHistory,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.History,
+            contentDescription = stringResource(R.string.listening_history),
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = stringResource(R.string.listening_history),
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.titleSmall
         )
@@ -820,7 +962,7 @@ private fun RescanButton(onRescan: () -> Unit) {
     ) {
         Icon(
             imageVector = Icons.Rounded.Refresh,
-            contentDescription = null,
+            contentDescription = stringResource(R.string.rescan_music),
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(8.dp))

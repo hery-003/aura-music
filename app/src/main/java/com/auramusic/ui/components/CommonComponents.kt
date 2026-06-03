@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -18,9 +17,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
-import coil.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImage
 import android.os.Build
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.auramusic.ui.theme.*
@@ -51,8 +51,25 @@ fun AlbumArtImage(
 fun SectionHeader(
     title: String,
     actionText: String? = null,
-    onActionClick: (() -> Unit)? = null
+    onActionClick: (() -> Unit)? = null,
+    animated: Boolean = false
 ) {
+    val titleColor = if (animated) {
+        val infiniteTransition = rememberInfiniteTransition(label = "section_hdr")
+        val hue by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart),
+            label = "section_hue"
+        )
+        val brush = Brush.horizontalGradient(
+            colors = listOf(Color.hsl(hue, 0.8f, 0.6f), MaterialTheme.colorScheme.onBackground)
+        )
+        brush
+    } else {
+        Brush.horizontalGradient(
+            colors = listOf(MaterialTheme.colorScheme.onBackground, MaterialTheme.colorScheme.onBackground)
+        )
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -63,7 +80,7 @@ fun SectionHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (!animated) MaterialTheme.colorScheme.onBackground else Color.hsl(0f, 0f, 1f, 0.9f),
             fontWeight = FontWeight.Bold
         )
         if (actionText != null && onActionClick != null) {
@@ -107,7 +124,44 @@ fun ShimmerPlaceholder(
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun rememberRainbowHue(durationMs: Int = 3000, label: String = "rainbow_hue"): State<Float> {
+    val transition = rememberInfiniteTransition(label = label)
+    return transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMs, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "${label}_value"
+    )
+}
+
+@Composable
+fun FallbackAlbumArt(
+    text: String,
+    modifier: Modifier = Modifier,
+    gradient: Brush = Brush.linearGradient(
+        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+    ),
+    textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleMedium,
+    textColor: Color = MaterialTheme.colorScheme.onBackground
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(brush = gradient),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text.firstOrNull()?.uppercase() ?: "♪",
+            style = textStyle,
+            color = textColor
+        )
+    }
+}
+
 @Composable
 fun GlassmorphismCard(
     modifier: Modifier = Modifier,
@@ -133,20 +187,35 @@ fun GlassmorphismCard(
 }
 
 @Composable
-fun NeonDivider() {
+fun NeonDivider(animated: Boolean = false) {
+    val brush = if (animated) {
+        val infiniteTransition = rememberInfiniteTransition(label = "neon_divider")
+        val hue by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Restart),
+            label = "divider_hue"
+        )
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color.hsl(hue, 0.8f, 0.6f).copy(alpha = 0.5f),
+                Color.hsl((hue + 60) % 360, 0.8f, 0.6f).copy(alpha = 0.5f),
+                Color.hsl((hue + 120) % 360, 0.8f, 0.6f).copy(alpha = 0f)
+            )
+        )
+    } else {
+        Brush.horizontalGradient(
+            colors = listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.primary.copy(alpha = 0f)
+            )
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0f)
-                    )
-                )
-            )
+            .background(brush = brush)
     )
 }
 

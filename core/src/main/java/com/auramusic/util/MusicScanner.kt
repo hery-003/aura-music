@@ -34,11 +34,16 @@ class MusicScanner(private val context: Context) {
                 MediaStore.Audio.Media.DATE_ADDED,
                 MediaStore.Audio.Media.DATE_MODIFIED,
                 MediaStore.Audio.Media.TRACK,
-                MediaStore.Audio.Media.GENRE,
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                projection.add(MediaStore.Audio.Media.BITRATE)
+                projection.add(MediaStore.Audio.Media.GENRE)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 projection.add(MediaStore.Audio.Media.RELATIVE_PATH)
                 projection.add(MediaStore.Audio.Media.DISPLAY_NAME)
+                // Even on Q+, DATA might be available and is often more reliable for file operations
+                projection.add(MediaStore.Audio.Media.DATA)
             } else {
                 projection.add(MediaStore.Audio.Media.DATA)
             }
@@ -77,15 +82,12 @@ class MusicScanner(private val context: Context) {
             val albumIdCol = getColumnSafe(cursor, MediaStore.Audio.Media.ALBUM_ID) ?: return songs
             val durationCol = getColumnSafe(cursor, MediaStore.Audio.Media.DURATION) ?: return songs
             val sizeCol = getColumnSafe(cursor, MediaStore.Audio.Media.SIZE)
+            val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) getColumnSafe(cursor, MediaStore.Audio.Media.BITRATE) else null
             val dateAddedCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATE_ADDED)
             val dateModifiedCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATE_MODIFIED)
             val trackCol = getColumnSafe(cursor, MediaStore.Audio.Media.TRACK)
-            val genreCol = getColumnSafe(cursor, MediaStore.Audio.Media.GENRE)
-            val dataCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                null
-            } else {
-                getColumnSafe(cursor, MediaStore.Audio.Media.DATA)
-            }
+            val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) getColumnSafe(cursor, MediaStore.Audio.Media.GENRE) else null
+            val dataCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATA)
             val relativePathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 getColumnSafe(cursor, MediaStore.Audio.Media.RELATIVE_PATH)
             } else null
@@ -102,20 +104,21 @@ class MusicScanner(private val context: Context) {
                         if (duration <= 0) continue
 
                         val genre = getStringSafe(c, genreCol) ?: genreMap[id] ?: "Unknown"
-                        val path = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        var path = getStringSafe(c, dataCol) ?: ""
+                        
+                        if (path.isBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                             val relPath = getStringSafe(c, relativePathCol) ?: ""
                             val displayName = getStringSafe(c, displayNameCol) ?: ""
                             if (relPath.isNotBlank() && displayName.isNotBlank()) {
-                                java.io.File(relPath, displayName).path
-                            } else ""
-                        } else {
-                            getStringSafe(c, dataCol) ?: ""
+                                path = "/storage/emulated/0/$relPath$displayName"
+                            }
                         }
                         val title = getStringSafe(c, titleCol) ?: "Unknown"
                         val artist = getStringSafe(c, artistCol) ?: "Unknown Artist"
                         val album = getStringSafe(c, albumCol) ?: "Unknown Album"
                         val albumId = getLongSafe(c, albumIdCol) ?: 0L
                         val size = getLongSafe(c, sizeCol) ?: 0L
+                        val bitrate = getIntSafe(c, bitrateCol) ?: 0
                         val dateAdded = getLongSafe(c, dateAddedCol) ?: 0L
                         val dateModified = getLongSafe(c, dateModifiedCol) ?: 0L
                         val trackNumber = getIntSafe(c, trackCol) ?: 0
@@ -131,6 +134,7 @@ class MusicScanner(private val context: Context) {
                                 duration = duration,
                                 path = path,
                                 size = size,
+                                bitrate = bitrate,
                                 dateAdded = dateAdded,
                                 dateModified = dateModified,
                                 trackNumber = trackNumber

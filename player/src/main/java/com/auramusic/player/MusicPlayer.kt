@@ -1,20 +1,25 @@
 package com.auramusic.player
 
-import android.content.Context
+import android.annotation.SuppressLint
 import android.content.ContentUris
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Player
-import android.annotation.SuppressLint
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.auramusic.data.preferences.AppPreferences
 import com.auramusic.domain.model.Song
+import com.auramusic.util.LrcParser
+import com.auramusic.util.LyricData
 import com.auramusic.util.getAlbumArtBitmap
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -23,18 +28,23 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+
+
+import timber.log.Timber
 
 @SuppressLint("UnsafeOptInUsageError")
 class MusicPlayer(
     private val context: Context,
     private val preferences: AppPreferences
 ) {
-    private val exceptionHandler = CoroutineExceptionHandler { _, e -> e.printStackTrace() }
+    private val exceptionHandler = CoroutineExceptionHandler { _, e -> Timber.e(e, "Unhandled coroutine exception") }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
 
     val equalizerManager = EqualizerManager()
@@ -52,16 +62,17 @@ class MusicPlayer(
         ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
+            .setSkipSilenceEnabled(true)
             .build()
     } catch (e: Exception) {
-        e.printStackTrace()
+        Timber.e(e, "Failed to build ExoPlayer with audio attributes")
         try {
             ExoPlayer.Builder(context)
                 .setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, false)
                 .setHandleAudioBecomingNoisy(true)
                 .build()
         } catch (e2: Exception) {
-            e2.printStackTrace()
+            Timber.e(e2, "Failed to build ExoPlayer fallback")
             null
         }
     }
@@ -86,16 +97,24 @@ class MusicPlayer(
     private val _repeatMode = MutableStateFlow(AppPreferences.REPEAT_ALL)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
+    private val _playbackSpeed = MutableStateFlow(1f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
     val queue: StateFlow<List<Song>> = _queue.asStateFlow()
 
     private val _currentIndex = MutableStateFlow(-1)
     val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
+    private val _lyricData = MutableStateFlow<LyricData?>(null)
+    val lyricData: StateFlow<LyricData?> = _lyricData.asStateFlow()
+
     private var crossfadeEnabled = false
     private var crossfadeDurationMs = 3000L
-    private var crossfadeJob: Job? = null
     private var fadeJob: Job? = null
+    private var crossfadeJob: Job? = null
+    private var positionUpdateJob: Job? = null
+    private var playerListener: Player.Listener? = null
 
     init {
         sleepTimerManager = SleepTimerManager(preferences) {
@@ -107,7 +126,7 @@ class MusicPlayer(
                 exoPlayer?.volume = 0.3f
             },
             onUnduck = {
-                exoPlayer?.volume = 1f
+            exoPlayer!!.volume = 1f
             },
             onPause = {
                 if (exoPlayer?.isPlaying == true) pause()
@@ -116,43 +135,102 @@ class MusicPlayer(
 
         scope.launch {
             try {
-                val enabled = preferences.crossfadeEnabled.first()
-                val durationSec = preferences.crossfadeDuration.first()
-                crossfadeEnabled = enabled
-                crossfadeDurationMs = (durationSec * 1000).toLong()
-            } catch (e: Exception) { e.printStackTrace()
+                crossfadeEnabled = preferences.crossfadeEnabled.first()
+                crossfadeDurationMs = (preferences.crossfadeDuration.first() * 1000).toLong()
+            } catch (e: Exception) { Timber.e(e, "Failed to load crossfade prefs")
             }
         }
 
-        exoPlayer?.let { player ->
-            player.volume = 1f
+        scope.launch {
+            try {
+                val timerActive = preferences.sleepTimerActive.first()
+                if (timerActive) {
+                    val durationSecs = preferences.sleepTimerDuration.first()
+                    if (durationSecs > 0) {
+                        sleepTimerManager.restore((durationSecs / 60).toInt())
+                    }
+                }
+            } catch (e: Exception) { Timber.e(e, "Failed to restore sleep timer") }
+        }
 
-            player.addListener(object : Player.Listener {
+        exoPlayer?.let { player ->
+            scope.launch {
+                try {
+                    val vol = preferences.volumeLevel.first()
+                    player.volume = vol.coerceIn(0f, 1f)
+                } catch (e: Exception) { Timber.e(e, "Failed to restore volume"); player.volume = 1f }
+            }
+
+            scope.launch {
+                try {
+                    val quality = preferences.audioQuality.first()
+                    setAudioQuality(quality == AppPreferences.AUDIO_QUALITY_HIGH)
+                } catch (e: Exception) { Timber.e(e, "Failed to restore audio quality") }
+            }
+
+            scope.launch {
+                try {
+                    val preset = preferences.equalizerPreset.first()
+                    equalizerManager.restorePreset(preset)
+                } catch (e: Exception) { Timber.e(e, "Failed to restore eq preset") }
+            }
+
+            scope.launch {
+                try {
+                    val speed = preferences.playbackSpeed.first()
+                    setPlaybackSpeed(speed)
+                } catch (e: Exception) { Timber.e(e, "Failed to restore speed") }
+            }
+
+            scope.launch {
+                try {
+                    val shuffle = preferences.shuffleMode.first()
+                    _shuffleMode.value = shuffle
+                    player.shuffleModeEnabled = shuffle
+                } catch (e: Exception) { Timber.e(e, "Failed to restore shuffle") }
+            }
+
+            scope.launch {
+                try {
+                    val repeat = preferences.repeatMode.first()
+                    _repeatMode.value = repeat
+                    player.repeatMode = when (repeat) {
+                        AppPreferences.REPEAT_ONE -> Player.REPEAT_MODE_ONE
+                        AppPreferences.REPEAT_ALL -> Player.REPEAT_MODE_ALL
+                        else -> Player.REPEAT_MODE_OFF
+                    }
+                } catch (e: Exception) { Timber.e(e, "Failed to restore repeat mode") }
+            }
+
+            val listener = object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
                 }
 
+                @Suppress("DEPRECATION")
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     _duration.value = player.duration
                     when (playbackState) {
                         Player.STATE_READY -> {
-                            Log.d("MusicPlayer", "Player STATE_READY, audioSessionId=${player.audioSessionId}")
+                            Timber.d("Player STATE_READY, audioSessionId=${player.audioSessionId}")
                             scope.launch {
                                 try {
                                     val sessionId = player.audioSessionId
                                     if (sessionId > 0) {
                                         equalizerManager.attach(sessionId)
                                         fftVisualizer.attach(sessionId)
-                                        Log.d("MusicPlayer", "Audio effects attached to session $sessionId")
+                                        Timber.d("Audio effects attached to session $sessionId")
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("MusicPlayer", "Failed to attach audio effects", e)
+                                    Timber.e(e, "Failed to attach audio effects")
                                 }
                             }
                         }
                         Player.STATE_ENDED -> {
-                            if (player.repeatMode == Player.REPEAT_MODE_OFF && player.nextMediaItemIndex == -1) {
-                                Log.d("MusicPlayer", "Queue ended, stopping playback")
+                            @Suppress("DEPRECATION")
+                            val hasNext = player.nextMediaItemIndex != -1
+                            if (player.repeatMode == Player.REPEAT_MODE_OFF && !hasNext) {
+                                Timber.d("Queue ended, stopping playback")
                                 _isPlaying.value = false
                             }
                         }
@@ -171,7 +249,7 @@ class MusicPlayer(
                                 _currentSong.value?.let {
                                     preferences.setLastPlayedData(it.id, 0L)
                                 }
-                            } catch (e: Exception) { e.printStackTrace() }
+                            } catch (e: Exception) { Timber.e(e, "Failed to save last played") }
                         }
 
                         scope.launch(Dispatchers.IO) {
@@ -180,41 +258,44 @@ class MusicPlayer(
                                 val bitmap = context.getAlbumArtBitmap(song.albumId, 64)
                                 if (bitmap != null) {
                                     colorManager.extractFromBitmap(bitmap)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) bitmap.recycle()
                                 } else {
                                     colorManager.reset()
                                 }
-                            } catch (e: Exception) { e.printStackTrace() }
+                            } catch (e: Exception) { Timber.e(e, "Failed to extract album art color") }
                         }
 
                         _currentSong.value?.let { song ->
                             colorManager.updateMode(song.genre)
+                            loadLyrics(song)
                         }
 
-                        player.volume = 1f
                         if (crossfadeEnabled && crossfadeDurationMs > 0) {
                             crossfadeJob?.cancel()
                             crossfadeJob = scope.launch {
-                                player.volume = 0f
                                 val steps = 20
-                                val stepDelay = crossfadeDurationMs / steps
+                                val stepMs = crossfadeDurationMs / (steps * 2)
+                                player.volume = 0.05f
                                 for (i in 1..steps) {
-                                    delay(stepDelay)
-                                    player.volume = (i.toFloat() / steps) * 1f
+                                    delay(stepMs)
+                                    player.volume = (i.toFloat() / steps).coerceAtMost(1f)
                                 }
                                 player.volume = 1f
                             }
+                        } else {
+                            player.volume = 1f
                         }
                     }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    Log.e("MusicPlayer", "PLAYBACK ERROR [errorCode=${error.errorCode}]: ${error.message}")
-                    Log.e("MusicPlayer", "Cause: ${error.cause?.message}")
-                    error.printStackTrace()
+                    Timber.e("PLAYBACK ERROR [errorCode=${error.errorCode}]: ${error.message}")
+                    Timber.e("Cause: ${error.cause?.message}")
+                    Timber.e(error, "Player error stacktrace")
                     val currentIdx = player.currentMediaItemIndex
                     val song = _currentSong.value
                     if (song != null) {
-                        Log.e("MusicPlayer", "Failed song: id=${song.id}, title='${song.title}', path=${song.path}")
+                        Timber.e("Failed song: id=${song.id}, title='${song.title}', path=${song.path}")
                     }
                     if (currentIdx >= 0 && currentIdx < player.mediaItemCount) {
                         player.removeMediaItem(currentIdx)
@@ -229,6 +310,7 @@ class MusicPlayer(
                             player.playWhenReady = true
                         }
                     } else {
+                        @Suppress("DEPRECATION")
                         val nextIndex = player.nextMediaItemIndex
                         if (nextIndex != -1) {
                             player.seekTo(nextIndex, 0L)
@@ -241,7 +323,16 @@ class MusicPlayer(
                         }
                     }
                 }
-            })
+            }
+            player.addListener(listener)
+            playerListener = listener
+        }
+
+        positionUpdateJob = scope.launch {
+            while (isActive) {
+                updatePosition()
+                delay(200)
+            }
         }
     }
 
@@ -253,7 +344,7 @@ class MusicPlayer(
         try {
             mediaSession?.release()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to release media session")
         }
         mediaSession = null
     }
@@ -263,11 +354,11 @@ class MusicPlayer(
             try {
                 val file = java.io.File(path)
                 if (file.exists() && file.length() > 0) {
-                    Log.d("MusicPlayer", "toPlayableUri: file path for '$title' -> $path")
+                    Timber.d("toPlayableUri: file path for '$title' -> $path")
                     return Uri.fromFile(file)
                 }
             } catch (e: Exception) {
-                Log.w("MusicPlayer", "toPlayableUri: file error for '$title'", e)
+                Timber.w(e, "toPlayableUri: file error for '$title'")
             }
         }
         val baseUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -276,17 +367,20 @@ class MusicPlayer(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         }
         val uri = ContentUris.withAppendedId(baseUri, id)
-        Log.d("MusicPlayer", "toPlayableUri: content URI for '$title' -> $uri")
+        Timber.d("toPlayableUri: content URI for '$title' -> $uri")
         return uri
     }
 
     fun setQueue(songs: List<Song>, startIndex: Int = 0, startPositionMs: Long = 0L) {
-        val player = exoPlayer ?: run { Log.e("MusicPlayer", "exoPlayer is null"); return }
+        val player = exoPlayer ?: run { Timber.e("exoPlayer is null"); return }
         if (songs.isEmpty()) {
-            Log.w("MusicPlayer", "setQueue: empty song list")
+            Timber.w("setQueue: empty song list")
             return
         }
         _queue.value = songs
+        val safeIndex = startIndex.coerceIn(0, songs.size - 1)
+        _currentIndex.value = safeIndex
+        _currentSong.value = songs.getOrNull(safeIndex)
         try {
             val mediaItems = songs.map { song ->
                 MediaItem.Builder()
@@ -301,19 +395,19 @@ class MusicPlayer(
                     )
                     .build()
             }
-            val safeIndex = startIndex.coerceIn(0, mediaItems.size - 1)
             player.setMediaItems(mediaItems, safeIndex, startPositionMs)
-            Log.d("MusicPlayer", "setQueue: ${mediaItems.size} songs, startIndex=$safeIndex, startPositionMs=$startPositionMs, first=${songs.getOrNull(safeIndex)?.title}")
+            Timber.d("setQueue: ${mediaItems.size} songs, startIndex=$safeIndex, startPositionMs=$startPositionMs, first=${songs.getOrNull(safeIndex)?.title}")
         } catch (e: Exception) {
-            Log.e("MusicPlayer", "setQueue failed", e)
+            Timber.e(e, "setQueue failed")
         }
+        persistQueue()
     }
 
     fun play() {
         try {
             exoPlayer?.apply {
                 if (mediaItemCount == 0) {
-                    Log.w("MusicPlayer", "play() called but no media items in queue")
+                    Timber.w("play() called but no media items in queue")
                     return
                 }
                 fadeJob?.cancel()
@@ -332,10 +426,10 @@ class MusicPlayer(
                     }
                     volume = 1f
                 }
-                Log.d("MusicPlayer", "play() called, playWhenReady=true, mediaItemCount=$mediaItemCount, currentWindowIndex=$currentWindowIndex")
-            } ?: Log.e("MusicPlayer", "play() called but exoPlayer is null")
+                Timber.d("play() called, playWhenReady=true, mediaItemCount=$mediaItemCount, currentMediaItemIndex=$currentMediaItemIndex")
+            } ?: Timber.e("play() called but exoPlayer is null")
         } catch (e: Exception) {
-            Log.e("MusicPlayer", "play() failed", e)
+            Timber.e(e, "play() failed")
         }
     }
 
@@ -355,7 +449,7 @@ class MusicPlayer(
                 audioFocusManager.abandonFocus()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "pause() failed")
         }
     }
 
@@ -364,15 +458,15 @@ class MusicPlayer(
         try {
             if (player.isPlaying) pause() else play()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "togglePlayPause() failed")
         }
     }
 
     fun playSong(song: Song) {
-        Log.d("MusicPlayer", "playSong: id=${song.id}, title='${song.title}'")
+        Timber.d("playSong: id=${song.id}, title='${song.title}'")
         val player = exoPlayer
-        if (player == null) { Log.e("MusicPlayer", "playSong: exoPlayer is null"); return }
-        Log.d("MusicPlayer", "playSong: state=${playbackStateName(player)}, itemCount=${player.mediaItemCount}")
+        if (player == null) { Timber.e("playSong: exoPlayer is null"); return }
+        Timber.d("playSong: state=${playbackStateName(player)}, itemCount=${player.mediaItemCount}")
         try {
             val existingIndex = _queue.value.indexOfFirst { it.id == song.id }
             if (existingIndex >= 0) {
@@ -380,22 +474,25 @@ class MusicPlayer(
                 _currentSong.value = song
                 player.seekTo(existingIndex, 0L)
                 player.playWhenReady = true
-                Log.d("MusicPlayer", "playSong: found in queue at index $existingIndex")
+                Timber.d("playSong: found in queue at index $existingIndex")
             } else {
                 val uri = song.toPlayableUri()
                 val mi = MediaItem.Builder()
                     .setMediaId(song.id.toString())
                     .setUri(uri)
                     .build()
-                _queue.value = listOf(song)
+                val newQueue = _queue.value + song
+                _queue.value = newQueue
                 _currentSong.value = song
-                _currentIndex.value = 0
-                player.setMediaItem(mi, true)
+                val newIndex = newQueue.lastIndex
+                _currentIndex.value = newIndex
+                player.addMediaItem(mi)
+                player.seekTo(newIndex, 0L)
                 player.playWhenReady = true
-                Log.d("MusicPlayer", "playSong: set as single-item queue")
+                Timber.d("playSong: appended to queue at index $newIndex (queue size=${newQueue.size})")
             }
         } catch (e: Exception) {
-            Log.e("MusicPlayer", "playSong failed", e)
+            Timber.e(e, "playSong failed")
         }
     }
 
@@ -410,13 +507,12 @@ class MusicPlayer(
     fun playNext() {
         val player = exoPlayer ?: return
         try {
-            val nextIndex = player.nextMediaItemIndex
-            if (nextIndex != -1) {
-                player.seekTo(nextIndex, 0L)
+            if (player.hasNextMediaItem()) {
+                player.seekToNextMediaItem()
                 play()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "playNext failed")
         }
     }
 
@@ -425,15 +521,12 @@ class MusicPlayer(
         try {
             if (player.currentPosition > 3000) {
                 player.seekTo(0)
-            } else {
-                val prevIndex = player.previousMediaItemIndex
-                if (prevIndex != -1) {
-                    player.seekTo(prevIndex, 0L)
-                    play()
-                }
+            } else if (player.hasPreviousMediaItem()) {
+                player.seekToPreviousMediaItem()
+                play()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "playPrevious failed")
         }
     }
 
@@ -442,7 +535,7 @@ class MusicPlayer(
             exoPlayer?.seekTo(position)
             _currentPosition.value = position
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "seekTo failed")
         }
     }
 
@@ -453,10 +546,10 @@ class MusicPlayer(
             _shuffleMode.value = newMode
             player.shuffleModeEnabled = newMode
             scope.launch {
-                try { preferences.setShuffleMode(newMode) } catch (e: Exception) { e.printStackTrace() }
+                try { preferences.setShuffleMode(newMode) } catch (e: Exception) { Timber.e(e, "Failed to save shuffle mode") }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "toggleShuffle failed")
         }
     }
 
@@ -475,22 +568,66 @@ class MusicPlayer(
                 else -> Player.REPEAT_MODE_OFF
             }
             scope.launch {
-                try { preferences.setRepeatMode(newMode) } catch (e: Exception) { e.printStackTrace() }
+                try { preferences.setRepeatMode(newMode) } catch (e: Exception) { Timber.e(e, "Failed to save repeat mode") }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "toggleRepeatMode failed")
         }
     }
 
     fun updatePosition() {
         val player = exoPlayer ?: return
         try {
-            _currentPosition.value = player.currentPosition
-            _duration.value = player.duration
+            val pos = player.currentPosition
+            if (pos >= 0L) {
+                _currentPosition.value = pos
+            }
+            val dur = player.duration
+            if (dur > 0) {
+                _duration.value = dur
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "updatePosition failed")
         }
     }
+
+    fun setAudioQuality(highQuality: Boolean) {
+        val player = exoPlayer ?: return
+        try {
+            val audioOffloadPref = TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                .setAudioOffloadMode(
+                    if (highQuality) {
+                        TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                    } else {
+                        TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                    }
+                )
+                .build()
+            val params = player.trackSelectionParameters
+                .buildUpon()
+                .setAudioOffloadPreferences(audioOffloadPref)
+                .build()
+            player.trackSelectionParameters = params
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to set audio quality")
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        val player = exoPlayer ?: return
+        try {
+            val clampedSpeed = speed.coerceIn(0.25f, 3.0f)
+            player.playbackParameters = PlaybackParameters(clampedSpeed)
+            _playbackSpeed.value = clampedSpeed
+            scope.launch {
+                try { preferences.setPlaybackSpeed(clampedSpeed) } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to set playback speed")
+        }
+    }
+
+    fun getAvailableSpeeds(): List<Float> = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f)
 
     fun addToQueue(song: Song) {
         val player = exoPlayer ?: return
@@ -508,8 +645,32 @@ class MusicPlayer(
                 )
                 .build()
             player.addMediaItem(mediaItem)
+            persistQueue()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "addToQueue failed")
+        }
+    }
+
+    fun playSongNext(song: Song) {
+        val player = exoPlayer ?: return
+        try {
+            val nextIndex = (_currentIndex.value + 1).coerceAtMost(_queue.value.size)
+            _queue.value = _queue.value.toMutableList().apply { add(nextIndex, song) }
+            val mediaItem = MediaItem.Builder()
+                .setMediaId(song.id.toString())
+                .setUri(song.toPlayableUri())
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(song.title)
+                        .setArtist(song.artistDisplay)
+                        .setAlbumTitle(song.album)
+                        .build()
+                )
+                .build()
+            player.addMediaItem(nextIndex, mediaItem)
+            persistQueue()
+        } catch (e: Exception) {
+            Timber.e(e, "playSongNext failed")
         }
     }
 
@@ -533,7 +694,7 @@ class MusicPlayer(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "removeFromQueue failed")
         }
     }
 
@@ -544,15 +705,71 @@ class MusicPlayer(
         try {
             exoPlayer?.clearMediaItems()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "clearQueue failed")
+        }
+        persistQueue()
+    }
+
+    private fun persistQueue() {
+        scope.launch {
+            try {
+                val ids = _queue.value.map { it.id }
+                val json = JSONArray(ids).toString()
+                val currentIdx = _currentIndex.value
+                val data = "$json|$currentIdx"
+                preferences.saveQueueJson(data)
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to persist queue")
+            }
+        }
+    }
+
+    fun restoreQueue(availableSongs: List<Song>) {
+        scope.launch {
+            try {
+                val raw = preferences.queueJson.first()
+                if (raw.isBlank()) return@launch
+                val parts = raw.split("|")
+                if (parts.size != 2) return@launch
+                val ids = mutableListOf<Long>()
+                val arr = JSONArray(parts[0])
+                for (i in 0 until arr.length()) {
+                    ids.add(arr.getLong(i))
+                }
+                val savedIndex = parts[1].toIntOrNull() ?: return@launch
+                val idSet = ids.toSet()
+                val songs = availableSongs.filter { it.id in idSet }
+                val orderMap = ids.withIndex().associate { it.value to it.index }
+                val ordered = songs.sortedBy { orderMap[it.id] ?: Int.MAX_VALUE }
+                if (ordered.isNotEmpty()) {
+                    val restoreIndex = ordered.indexOfFirst { it.id == ids.getOrNull(savedIndex) }
+                        .coerceAtLeast(0)
+                    setQueue(ordered, restoreIndex)
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to restore queue")
+            }
         }
     }
 
     fun setCrossfade(enabled: Boolean, durationSec: Int) {
         crossfadeEnabled = enabled
         crossfadeDurationMs = (durationSec * 1000).toLong()
-        if (enabled && exoPlayer?.isPlaying == true) {
-            exoPlayer?.volume = 1f
+    }
+
+    private fun loadLyrics(song: Song) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val lrcFile = LrcParser.findLrcFile(song.path)
+                if (lrcFile != null) {
+                    val data = LrcParser.parse(lrcFile)
+                    _lyricData.value = data
+                } else {
+                    _lyricData.value = null
+                }
+            } catch (e: Exception) {
+                _lyricData.value = null
+            }
         }
     }
 
@@ -560,7 +777,7 @@ class MusicPlayer(
         try {
             exoPlayer?.stop()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "stop failed")
         }
         _isPlaying.value = false
     }
@@ -568,22 +785,31 @@ class MusicPlayer(
     fun release() {
         try {
             stop()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "stop failed") }
+        try {
+            positionUpdateJob?.cancel()
+        } catch (e: Exception) { Timber.e(e, "cancel positionUpdateJob failed") }
+        try {
+            playerListener?.let { exoPlayer?.removeListener(it) }
+        } catch (e: Exception) { Timber.e(e, "removeListener failed") }
+        try {
+            exoPlayer?.release()
+        } catch (e: Exception) { Timber.e(e, "exoPlayer release failed") }
         try {
             equalizerManager.release()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "equalizerManager release failed") }
         try {
             sleepTimerManager.release()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "sleepTimerManager release failed") }
         try {
             fftVisualizer.release()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "fftVisualizer release failed") }
         try {
             audioFocusManager.release()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "audioFocusManager release failed") }
         try {
             scope.cancel()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { Timber.e(e, "scope cancel failed") }
     }
 
     fun restoreState(songs: List<Song>, lastSongId: Long, lastPosition: Long) {
@@ -595,7 +821,7 @@ class MusicPlayer(
                 setQueue(songs, index, lastPosition)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "restoreState failed")
         }
     }
 }

@@ -10,7 +10,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +42,8 @@ fun SearchScreen(
     onSearchArtists: (String) -> List<String> = { emptyList() },
     onSearchAlbums: (String) -> List<Album> = { emptyList() },
     onPlaySong: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
     onToggleFavorite: (Song) -> Unit,
     onBack: () -> Unit,
     onSongMoreOptions: (Song) -> Unit = {},
@@ -52,6 +54,7 @@ fun SearchScreen(
     onAlbumClick: (Long) -> Unit = {},
     searchHistory: List<String> = emptyList(),
     onClearSearchHistory: () -> Unit = {},
+    currentSongId: Long? = null,
     animationsEnabled: Boolean = true
 ) {
     var query by remember { mutableStateOf("") }
@@ -112,6 +115,8 @@ fun SearchScreen(
                     artists = onSearchArtists(query),
                     albums = onSearchAlbums(query),
                     onPlaySong = onPlaySong,
+                    onPlayNext = onPlayNext,
+                    onAddToQueue = onAddToQueue,
                     onToggleFavorite = onToggleFavorite,
                     onSongMoreOptions = onSongMoreOptions,
                     onDeleteSong = onDeleteSong,
@@ -119,6 +124,7 @@ fun SearchScreen(
                     onFolderClick = onFolderClick,
                     onArtistClick = onArtistClick,
                     onAlbumClick = onAlbumClick,
+                    currentSongId = currentSongId,
                     animationsEnabled = animationsEnabled
                 )
             }
@@ -321,6 +327,8 @@ private fun SearchResults(
     artists: List<String> = emptyList(),
     albums: List<Album> = emptyList(),
     onPlaySong: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
     onToggleFavorite: (Song) -> Unit,
     onSongMoreOptions: (Song) -> Unit,
     onDeleteSong: (Song) -> Unit,
@@ -328,6 +336,7 @@ private fun SearchResults(
     onFolderClick: (String) -> Unit,
     onArtistClick: (String) -> Unit = {},
     onAlbumClick: (Long) -> Unit = {},
+    currentSongId: Long? = null,
     animationsEnabled: Boolean = true
 ) {
     LazyColumn(
@@ -349,9 +358,12 @@ private fun SearchResults(
                     SongItem(
                         song = song,
                         onClick = { onPlaySong(song) },
+                        onPlayNext = { onPlayNext(song) },
+                        onAddToQueue = { onAddToQueue(song) },
                         onFavoriteToggle = { onToggleFavorite(song) },
                         onAddToPlaylist = { onSongMoreOptions(song) },
-                        onDeleteSong = { onDeleteSong(song) }
+                        onDeleteSong = { onDeleteSong(song) },
+                        isCurrentlyPlaying = song.id == currentSongId
                     )
                 }
             }
@@ -455,7 +467,7 @@ private fun SearchResults(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                        imageVector = Icons.Rounded.MusicNote,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)

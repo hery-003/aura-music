@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,7 +44,9 @@ fun PlaylistDetailScreen(
     onBack: () -> Unit,
     onDeletePlaylist: () -> Unit,
     onReorderSongs: (List<Long>) -> Unit = {},
-    onEditPlaylist: (Long, String, String) -> Unit = { _, _, _ -> }
+    onEditPlaylist: (Long, String, String) -> Unit = { _, _, _ -> },
+    onExportPlaylist: () -> Unit = {},
+    currentSongId: Long? = null
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -159,7 +162,7 @@ fun PlaylistDetailScreen(
                 title = { Text(playlistName, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = stringResource(R.string.back), tint = MaterialTheme.colorScheme.onBackground)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.back), tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 actions = {
@@ -178,6 +181,9 @@ fun PlaylistDetailScreen(
                                 tint = if (isReordering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
                             )
                         }
+                    }
+                    IconButton(onClick = onExportPlaylist) {
+                        Icon(Icons.Rounded.Share, contentDescription = "Export playlist", tint = MaterialTheme.colorScheme.onBackground)
                     }
                     IconButton(onClick = { showDeleteDialog = true }) {
                         Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.delete_playlist_cd), tint = Color(0xFFFF4444))
@@ -232,7 +238,7 @@ fun PlaylistDetailScreen(
                             shape = RoundedCornerShape(24.dp),
                             modifier = Modifier.height(48.dp)
                         ) {
-                            Icon(Icons.Rounded.Shuffle, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.shuffle), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.shuffle_play), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
                         }
@@ -242,7 +248,7 @@ fun PlaylistDetailScreen(
                             modifier = Modifier.height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground)
                         ) {
-                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.PlayArrow, contentDescription = stringResource(R.string.play), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.play_all), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
                         }
@@ -326,7 +332,8 @@ fun PlaylistDetailScreen(
                                         onClick = { onPlaySong(song) },
                                         onFavoriteToggle = { onToggleFavorite(song) },
                                         onAddToPlaylist = { songToRemoveId = song.id },
-                                        onDeleteSong = { onDeleteSong(song) }
+                                        onDeleteSong = { onDeleteSong(song) },
+                                        isCurrentlyPlaying = song.id == currentSongId
                                     )
                                 }
                             }
@@ -343,7 +350,8 @@ fun PlaylistDetailScreen(
                                         onClick = { onPlaySong(song) },
                                         onFavoriteToggle = { onToggleFavorite(song) },
                                         onAddToPlaylist = { songToRemoveId = song.id },
-                                        onDeleteSong = { onDeleteSong(song) }
+                                        onDeleteSong = { onDeleteSong(song) },
+                                        isCurrentlyPlaying = song.id == currentSongId
                                     )
                                 }
                                 IconButton(onClick = { songToRemoveId = song.id }) {

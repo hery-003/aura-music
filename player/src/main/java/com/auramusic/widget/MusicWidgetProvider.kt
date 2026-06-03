@@ -3,18 +3,15 @@ package com.auramusic.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
-import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.graphics.Bitmap
 import android.os.Build
 import android.util.Log
-import android.annotation.SuppressLint
 import android.widget.RemoteViews
 import com.auramusic.player.R
 import com.auramusic.service.MusicPlaybackService
 
-@SuppressLint("UnsafeOptInUsageError")
 class MusicWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(
@@ -25,7 +22,7 @@ class MusicWidgetProvider : AppWidgetProvider() {
         try {
             for (appWidgetId in appWidgetIds) {
                 try {
-                    updateWidget(context, appWidgetManager, appWidgetId, null, null, false, -1L)
+                    updateWidget(context, appWidgetManager, appWidgetId, null, null, false, null)
                 } catch (e: Exception) {
                     Log.e("MusicWidgetProvider", "Error updating widget $appWidgetId", e)
                 }
@@ -36,8 +33,6 @@ class MusicWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        const val ACTION_UPDATE_WIDGET = "com.auramusic.UPDATE_WIDGET"
-
         fun updateWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -45,7 +40,7 @@ class MusicWidgetProvider : AppWidgetProvider() {
             title: String?,
             artist: String?,
             isPlaying: Boolean,
-            albumId: Long = -1L
+            albumArtBitmap: Bitmap? = null
         ) {
             try {
                 val views = RemoteViews(context.packageName, R.layout.app_widget_info)
@@ -59,15 +54,8 @@ class MusicWidgetProvider : AppWidgetProvider() {
                     artist ?: context.getString(R.string.no_songs_found)
                 )
 
-                if (albumId > 0) {
-                    val albumArtUri = ContentUris.withAppendedId(
-                        Uri.parse("content://media/external/audio/albumart"),
-                        albumId
-                    )
-                    views.setImageViewUri(R.id.widget_album_art, albumArtUri)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        views.setInt(R.id.widget_album_art, "setClipToOutline", 1)
-                    }
+                if (albumArtBitmap != null) {
+                    views.setImageViewBitmap(R.id.widget_album_art, albumArtBitmap)
                 }
 
                 val playIcon = if (isPlaying) {
@@ -80,6 +68,14 @@ class MusicWidgetProvider : AppWidgetProvider() {
                 val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     PendingIntent.FLAG_IMMUTABLE
                 } else 0
+
+                val openAppIntent = Intent(context, MusicPlaybackService::class.java).apply {
+                    action = MusicPlaybackService.ACTION_OPEN_APP
+                }
+                views.setOnClickPendingIntent(
+                    R.id.widget_album_art,
+                    PendingIntent.getService(context, 3, openAppIntent, flags)
+                )
 
                 try {
                     val prevIntent = Intent(context, MusicPlaybackService::class.java).apply {

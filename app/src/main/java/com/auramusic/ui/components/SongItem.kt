@@ -1,10 +1,14 @@
 package com.auramusic.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -12,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,16 +34,26 @@ fun SongItem(
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onAddToPlaylist: () -> Unit = {},
+    onPlayNext: () -> Unit = {},
+    onAddToQueue: () -> Unit = {},
     onDeleteSong: () -> Unit = {},
     showArtwork: Boolean = true,
+    isCurrentlyPlaying: Boolean = false,
     trailingContent: @Composable (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val albumArtUri = remember(song.albumId) { context.getAlbumArtUri(song.albumId) }
 
+    val bgColor by animateColorAsState(
+        targetValue = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                      else Color.Transparent,
+        label = "songItemBg"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isCurrentlyPlaying) Modifier.background(bgColor, RoundedCornerShape(12.dp)) else Modifier)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -55,43 +70,57 @@ fun SongItem(
                     contentDescription = stringResource(R.string.album_art),
                     modifier = Modifier.fillMaxSize(),
                     fallback = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = song.title.firstOrNull()?.uppercase() ?: "♪",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
+                        FallbackAlbumArt(text = song.title)
                     }
                 )
+                if (isCurrentlyPlaying) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Equalizer,
+                            contentDescription = stringResource(R.string.now_playing),
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.width(14.dp))
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isCurrentlyPlaying) {
+                    Icon(
+                        imageVector = Icons.Rounded.Equalizer,
+                        contentDescription = stringResource(R.string.now_playing),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                    fontWeight = if (isCurrentlyPlaying) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = song.artistDisplay,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -132,12 +161,28 @@ fun SongItem(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Play Next") },
+                            onClick = {
+                                showMenu = false
+                                onPlayNext()
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.PlaylistPlay, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add to Queue") },
+                            onClick = {
+                                showMenu = false
+                                onAddToQueue()
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.QueueMusic, null) }
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.add_to_playlist)) },
                             onClick = {
                                 showMenu = false
                                 onAddToPlaylist()
                             },
-                            leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) }
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) }
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.delete_song), color = MaterialTheme.colorScheme.error) },
@@ -167,7 +212,7 @@ fun AddToPlaylistDialog(
         textContentColor = MaterialTheme.colorScheme.onBackground,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.PlaylistAdd, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.add_to_playlist), color = MaterialTheme.colorScheme.onBackground)
             }
@@ -182,7 +227,7 @@ fun AddToPlaylistDialog(
                             onClick = { onSelectPlaylist(playlist.id) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Rounded.QueueMusic, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.width(12.dp))
                             Text(
                                 text = playlist.name,
