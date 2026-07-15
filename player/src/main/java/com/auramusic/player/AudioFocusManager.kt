@@ -5,7 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
-import android.util.Log
+import timber.log.Timber
 
 class AudioFocusManager(private val context: Context) {
 
@@ -78,7 +78,7 @@ class AudioFocusManager(private val context: Context) {
                 return result == AudioManager.AUDIOFOCUS_GAIN
             }
         } catch (e: Exception) {
-            Log.e("AudioFocusManager", "Error requesting audio focus", e)
+            Timber.e(e, "Error requesting audio focus")
             return false
         }
     }
@@ -95,7 +95,7 @@ class AudioFocusManager(private val context: Context) {
             }
             currentFocus = AudioManager.AUDIOFOCUS_NONE
         } catch (e: Exception) {
-            Log.e("AudioFocusManager", "Error abandoning audio focus", e)
+            Timber.e(e, "Error abandoning audio focus")
         }
     }
 

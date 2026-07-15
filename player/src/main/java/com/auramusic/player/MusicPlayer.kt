@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import android.provider.MediaStore
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -18,7 +17,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import com.auramusic.data.preferences.AppPreferences
 import com.auramusic.domain.model.Song
+import com.auramusic.util.AutoLyricsProvider
 import com.auramusic.util.LrcParser
+import com.auramusic.util.isAtLeastP
+import com.auramusic.util.isAtLeastQ
+import com.auramusic.util.isAtLeastR
 import com.auramusic.util.LyricData
 import com.auramusic.util.getAlbumArtBitmap
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -35,7 +38,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
-
 
 import timber.log.Timber
 
@@ -109,12 +111,15 @@ class MusicPlayer(
     private val _lyricData = MutableStateFlow<LyricData?>(null)
     val lyricData: StateFlow<LyricData?> = _lyricData.asStateFlow()
 
+    var onSongStartedPlaying: ((Song) -> Unit)? = null
+
     private var crossfadeEnabled = false
     private var crossfadeDurationMs = 3000L
     private var fadeJob: Job? = null
     private var crossfadeJob: Job? = null
     private var positionUpdateJob: Job? = null
     private var playerListener: Player.Listener? = null
+    private var persistJob: Job? = null
 
     init {
         sleepTimerManager = SleepTimerManager(preferences) {
@@ -126,7 +131,7 @@ class MusicPlayer(
                 exoPlayer?.volume = 0.3f
             },
             onUnduck = {
-            exoPlayer!!.volume = 1f
+                exoPlayer?.volume = 1f
             },
             onPause = {
                 if (exoPlayer?.isPlaying == true) pause()
@@ -207,7 +212,6 @@ class MusicPlayer(
                     _isPlaying.value = isPlaying
                 }
 
-                @Suppress("DEPRECATION")
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     _duration.value = player.duration
                     when (playbackState) {
@@ -227,9 +231,7 @@ class MusicPlayer(
                             }
                         }
                         Player.STATE_ENDED -> {
-                            @Suppress("DEPRECATION")
-                            val hasNext = player.nextMediaItemIndex != -1
-                            if (player.repeatMode == Player.REPEAT_MODE_OFF && !hasNext) {
+                            if (!player.hasNextMediaItem() && player.repeatMode == Player.REPEAT_MODE_OFF) {
                                 Timber.d("Queue ended, stopping playback")
                                 _isPlaying.value = false
                             }
@@ -258,7 +260,7 @@ class MusicPlayer(
                                 val bitmap = context.getAlbumArtBitmap(song.albumId, 64)
                                 if (bitmap != null) {
                                     colorManager.extractFromBitmap(bitmap)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) bitmap.recycle()
+                                    if (isAtLeastP) bitmap.recycle()
                                 } else {
                                     colorManager.reset()
                                 }
@@ -272,6 +274,7 @@ class MusicPlayer(
 
                         if (crossfadeEnabled && crossfadeDurationMs > 0) {
                             crossfadeJob?.cancel()
+                            fadeJob?.cancel()
                             crossfadeJob = scope.launch {
                                 val steps = 20
                                 val stepMs = crossfadeDurationMs / (steps * 2)
@@ -285,42 +288,50 @@ class MusicPlayer(
                         } else {
                             player.volume = 1f
                         }
+
+                        if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
+                            _currentSong.value?.let { onSongStartedPlaying?.invoke(it) }
+                        }
                     }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    Timber.e("PLAYBACK ERROR [errorCode=${error.errorCode}]: ${error.message}")
-                    Timber.e("Cause: ${error.cause?.message}")
-                    Timber.e(error, "Player error stacktrace")
-                    val currentIdx = player.currentMediaItemIndex
-                    val song = _currentSong.value
-                    if (song != null) {
-                        Timber.e("Failed song: id=${song.id}, title='${song.title}', path=${song.path}")
-                    }
-                    if (currentIdx >= 0 && currentIdx < player.mediaItemCount) {
-                        player.removeMediaItem(currentIdx)
-                        _queue.value = _queue.value.toMutableList().also { it.removeAt(currentIdx) }
-                        if (currentIdx < player.mediaItemCount) {
-                            player.seekTo(currentIdx, 0L)
-                            player.prepare()
-                            player.playWhenReady = true
-                        } else if (player.mediaItemCount > 0) {
-                            player.seekTo(0, 0L)
-                            player.prepare()
-                            player.playWhenReady = true
+                    try {
+                        Timber.e("PLAYBACK ERROR [errorCode=${error.errorCode}]: ${error.message}")
+                        Timber.e("Cause: ${error.cause?.message}")
+                        Timber.e(error, "Player error stacktrace")
+                        val currentIdx = player.currentMediaItemIndex
+                        val song = _currentSong.value
+                        if (song != null) {
+                            Timber.e("Failed song: id=${song.id}, title='${song.title}', path=${song.path}")
                         }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        val nextIndex = player.nextMediaItemIndex
-                        if (nextIndex != -1) {
-                            player.seekTo(nextIndex, 0L)
-                            player.prepare()
-                            player.playWhenReady = true
-                        } else if (player.mediaItemCount > 0) {
-                            player.seekTo(0, 0L)
-                            player.prepare()
-                            player.playWhenReady = true
+                        if (currentIdx >= 0 && currentIdx < player.mediaItemCount) {
+                            player.removeMediaItem(currentIdx)
+                            _queue.value = _queue.value.toMutableList().also { it.removeAt(currentIdx) }
+                            if (currentIdx < player.mediaItemCount) {
+                                player.seekTo(currentIdx, 0L)
+                                player.prepare()
+                                player.playWhenReady = true
+                            } else if (player.mediaItemCount > 0) {
+                                player.seekTo(0, 0L)
+                                player.prepare()
+                                player.playWhenReady = true
+                            }
+                        } else {
+                            @Suppress("DEPRECATION")
+                            val nextIndex = player.nextMediaItemIndex
+                            if (nextIndex != -1) {
+                                player.seekTo(nextIndex, 0L)
+                                player.prepare()
+                                player.playWhenReady = true
+                            } else if (player.mediaItemCount > 0) {
+                                player.seekTo(0, 0L)
+                                player.prepare()
+                                player.playWhenReady = true
+                            }
                         }
+                    } catch (e: Exception) {
+                        Timber.e(e, "onPlayerError handler failed")
                     }
                 }
             }
@@ -350,7 +361,7 @@ class MusicPlayer(
     }
 
     private fun Song.toPlayableUri(): Uri {
-        if (path.isNotBlank() && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        if (path.isNotBlank() && !isAtLeastQ) {
             try {
                 val file = java.io.File(path)
                 if (file.exists() && file.length() > 0) {
@@ -361,7 +372,7 @@ class MusicPlayer(
                 Timber.w(e, "toPlayableUri: file error for '$title'")
             }
         }
-        val baseUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val baseUri = if (isAtLeastR) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
         } else {
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -377,10 +388,7 @@ class MusicPlayer(
             Timber.w("setQueue: empty song list")
             return
         }
-        _queue.value = songs
         val safeIndex = startIndex.coerceIn(0, songs.size - 1)
-        _currentIndex.value = safeIndex
-        _currentSong.value = songs.getOrNull(safeIndex)
         try {
             val mediaItems = songs.map { song ->
                 MediaItem.Builder()
@@ -396,11 +404,14 @@ class MusicPlayer(
                     .build()
             }
             player.setMediaItems(mediaItems, safeIndex, startPositionMs)
+            _queue.value = songs
+            _currentIndex.value = safeIndex
+            _currentSong.value = songs.getOrNull(safeIndex)
             Timber.d("setQueue: ${mediaItems.size} songs, startIndex=$safeIndex, startPositionMs=$startPositionMs, first=${songs.getOrNull(safeIndex)?.title}")
+            persistQueue()
         } catch (e: Exception) {
             Timber.e(e, "setQueue failed")
         }
-        persistQueue()
     }
 
     fun play() {
@@ -412,7 +423,7 @@ class MusicPlayer(
                 }
                 fadeJob?.cancel()
                 audioFocusManager.requestFocus()
-                if (playbackState == Player.STATE_IDLE) {
+                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
                     prepare()
                 }
                 playWhenReady = true
@@ -437,6 +448,7 @@ class MusicPlayer(
         try {
             val player = exoPlayer ?: return
             fadeJob?.cancel()
+            crossfadeJob?.cancel()
             fadeJob = scope.launch {
                 val steps = 15
                 val stepDelay = 20L
@@ -473,13 +485,20 @@ class MusicPlayer(
                 _currentIndex.value = existingIndex
                 _currentSong.value = song
                 player.seekTo(existingIndex, 0L)
-                player.playWhenReady = true
+                play()
                 Timber.d("playSong: found in queue at index $existingIndex")
             } else {
                 val uri = song.toPlayableUri()
                 val mi = MediaItem.Builder()
                     .setMediaId(song.id.toString())
                     .setUri(uri)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(song.title)
+                            .setArtist(song.artistDisplay)
+                            .setAlbumTitle(song.album)
+                            .build()
+                    )
                     .build()
                 val newQueue = _queue.value + song
                 _queue.value = newQueue
@@ -488,7 +507,7 @@ class MusicPlayer(
                 _currentIndex.value = newIndex
                 player.addMediaItem(mi)
                 player.seekTo(newIndex, 0L)
-                player.playWhenReady = true
+                play()
                 Timber.d("playSong: appended to queue at index $newIndex (queue size=${newQueue.size})")
             }
         } catch (e: Exception) {
@@ -521,6 +540,7 @@ class MusicPlayer(
         try {
             if (player.currentPosition > 3000) {
                 player.seekTo(0)
+                play()
             } else if (player.hasPreviousMediaItem()) {
                 player.seekToPreviousMediaItem()
                 play()
@@ -536,6 +556,14 @@ class MusicPlayer(
             _currentPosition.value = position
         } catch (e: Exception) {
             Timber.e(e, "seekTo failed")
+        }
+    }
+
+    fun seekToMediaItem(index: Int) {
+        try {
+            exoPlayer?.seekTo(index, 0L)
+        } catch (e: Exception) {
+            Timber.e(e, "seekToMediaItem failed")
         }
     }
 
@@ -674,6 +702,26 @@ class MusicPlayer(
         }
     }
 
+    fun moveInQueue(fromIndex: Int, toIndex: Int) {
+        val player = exoPlayer ?: return
+        try {
+            if (fromIndex !in _queue.value.indices || toIndex !in _queue.value.indices) return
+            val list = _queue.value.toMutableList()
+            val song = list.removeAt(fromIndex)
+            list.add(toIndex, song)
+            _queue.value = list
+            player.moveMediaItem(fromIndex, toIndex)
+            if (_currentIndex.value == fromIndex) {
+                _currentIndex.value = toIndex
+            } else if (_currentIndex.value == toIndex) {
+                _currentIndex.value = fromIndex
+            }
+            persistQueue()
+        } catch (e: Exception) {
+            Timber.e(e, "moveInQueue failed")
+        }
+    }
+
     fun removeFromQueue(index: Int) {
         val player = exoPlayer ?: return
         try {
@@ -692,6 +740,7 @@ class MusicPlayer(
                         _isPlaying.value = false
                     }
                 }
+                persistQueue()
             }
         } catch (e: Exception) {
             Timber.e(e, "removeFromQueue failed")
@@ -711,7 +760,9 @@ class MusicPlayer(
     }
 
     private fun persistQueue() {
-        scope.launch {
+        persistJob?.cancel()
+        persistJob = scope.launch {
+            delay(300)
             try {
                 val ids = _queue.value.map { it.id }
                 val json = JSONArray(ids).toString()
@@ -763,7 +814,14 @@ class MusicPlayer(
                 val lrcFile = LrcParser.findLrcFile(song.path)
                 if (lrcFile != null) {
                     val data = LrcParser.parse(lrcFile)
-                    _lyricData.value = data
+                    if (data != null && data.lines.isNotEmpty()) {
+                        _lyricData.value = data
+                        return@launch
+                    }
+                }
+                val fetched = AutoLyricsProvider.fetchLyrics(song.title, song.artistDisplay, song.album, _duration.value)
+                if (fetched != null && fetched.lines.isNotEmpty()) {
+                    _lyricData.value = fetched
                 } else {
                     _lyricData.value = null
                 }
@@ -783,6 +841,9 @@ class MusicPlayer(
     }
 
     fun release() {
+        try {
+            scope.cancel()
+        } catch (e: Exception) { Timber.e(e, "cancel scope failed") }
         try {
             stop()
         } catch (e: Exception) { Timber.e(e, "stop failed") }
@@ -807,9 +868,6 @@ class MusicPlayer(
         try {
             audioFocusManager.release()
         } catch (e: Exception) { Timber.e(e, "audioFocusManager release failed") }
-        try {
-            scope.cancel()
-        } catch (e: Exception) { Timber.e(e, "scope cancel failed") }
     }
 
     fun restoreState(songs: List<Song>, lastSongId: Long, lastPosition: Long) {

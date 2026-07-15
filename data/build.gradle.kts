@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
     implementation(libs.core.ktx)
+    implementation(libs.timber)
     implementation(libs.work.runtime)
     implementation(libs.kotlinx.serialization.json)
 }

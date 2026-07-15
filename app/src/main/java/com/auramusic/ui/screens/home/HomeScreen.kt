@@ -30,6 +30,7 @@ import com.auramusic.domain.model.Song
 import com.auramusic.ui.components.*
 import com.auramusic.ui.theme.*
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
 import com.auramusic.R
 import com.auramusic.util.getAlbumArtUri
 
@@ -81,7 +82,7 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Aura Music",
+                            text = stringResource(R.string.app_name),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
@@ -383,7 +384,7 @@ fun PlaylistCard(playlist: Playlist, onClick: () -> Unit, cardSize: Dp = 140.dp)
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "${playlist.songCount} ${stringResource(R.string.songs).lowercase()}",
+            text = LocalResources.current.getQuantityString(R.plurals.song_count, playlist.songCount, playlist.songCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

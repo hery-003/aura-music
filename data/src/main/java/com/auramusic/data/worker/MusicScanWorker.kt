@@ -36,13 +36,19 @@ class MusicScanWorker(
 
             val scanner = MusicScanner(applicationContext)
             val songs = scanner.scanAudioFiles()
+            val database = AuraDatabase.getInstance(applicationContext)
+            val repository = MusicRepositoryImpl(
+                songDao = database.songDao(),
+                playlistDao = database.playlistDao()
+            )
             if (songs.isNotEmpty()) {
-                val database = AuraDatabase.getInstance(applicationContext)
-                val repository = MusicRepositoryImpl(
-                    songDao = database.songDao(),
-                    playlistDao = database.playlistDao()
-                )
                 repository.scanAndInsertSongs(songs)
+                repository.deleteSongsNotInIds(songs.map { it.id })
+            } else {
+                val existingCount = repository.getSongCount()
+                if (existingCount > 0) {
+                    repository.clearAllSongs()
+                }
             }
             Result.success()
         } catch (e: Exception) {

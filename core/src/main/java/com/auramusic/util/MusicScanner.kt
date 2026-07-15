@@ -3,21 +3,22 @@ package com.auramusic.util
 import android.content.Context
 import android.database.Cursor
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import com.auramusic.domain.model.Song
+import timber.log.Timber
 
 class MusicScanner(private val context: Context) {
 
     fun scanAudioFiles(): List<Song> {
         val songs = mutableListOf<Song>()
-        val genreMap = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        val genreMap = if (!isAtLeastR) {
             buildGenreMap()
         } else {
             emptyMap()
         }
         try {
-            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val collection = if (isAtLeastR) {
                 MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             } else {
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -35,14 +36,13 @@ class MusicScanner(private val context: Context) {
                 MediaStore.Audio.Media.DATE_MODIFIED,
                 MediaStore.Audio.Media.TRACK,
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (isAtLeastR) {
                 projection.add(MediaStore.Audio.Media.BITRATE)
                 projection.add(MediaStore.Audio.Media.GENRE)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (isAtLeastQ) {
                 projection.add(MediaStore.Audio.Media.RELATIVE_PATH)
                 projection.add(MediaStore.Audio.Media.DISPLAY_NAME)
-                // Even on Q+, DATA might be available and is often more reliable for file operations
                 projection.add(MediaStore.Audio.Media.DATA)
             } else {
                 projection.add(MediaStore.Audio.Media.DATA)
@@ -60,18 +60,18 @@ class MusicScanner(private val context: Context) {
                     sortOrder
                 )
             } catch (e: SecurityException) {
-                Log.e("MusicScanner", "Security exception accessing MediaStore", e)
+                Timber.e(e, "Security exception accessing MediaStore")
                 return songs
             } catch (e: IllegalStateException) {
-                Log.e("MusicScanner", "IllegalStateException accessing MediaStore", e)
+                Timber.e(e, "IllegalStateException accessing MediaStore")
                 return songs
             } catch (e: Exception) {
-                Log.e("MusicScanner", "Error querying MediaStore", e)
+                Timber.e(e, "Error querying MediaStore")
                 return songs
             }
 
             if (cursor == null) {
-                Log.w("MusicScanner", "Cursor is null, no audio files found or no permission")
+                Timber.w("Cursor is null, no audio files found or no permission")
                 return songs
             }
 
@@ -82,16 +82,16 @@ class MusicScanner(private val context: Context) {
             val albumIdCol = getColumnSafe(cursor, MediaStore.Audio.Media.ALBUM_ID) ?: return songs
             val durationCol = getColumnSafe(cursor, MediaStore.Audio.Media.DURATION) ?: return songs
             val sizeCol = getColumnSafe(cursor, MediaStore.Audio.Media.SIZE)
-            val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) getColumnSafe(cursor, MediaStore.Audio.Media.BITRATE) else null
+            val bitrateCol = if (isAtLeastR) getColumnSafe(cursor, MediaStore.Audio.Media.BITRATE) else null
             val dateAddedCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATE_ADDED)
             val dateModifiedCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATE_MODIFIED)
             val trackCol = getColumnSafe(cursor, MediaStore.Audio.Media.TRACK)
-            val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) getColumnSafe(cursor, MediaStore.Audio.Media.GENRE) else null
+            val genreCol = if (isAtLeastR) getColumnSafe(cursor, MediaStore.Audio.Media.GENRE) else null
             val dataCol = getColumnSafe(cursor, MediaStore.Audio.Media.DATA)
-            val relativePathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val relativePathCol = if (isAtLeastQ) {
                 getColumnSafe(cursor, MediaStore.Audio.Media.RELATIVE_PATH)
             } else null
-            val displayNameCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val displayNameCol = if (isAtLeastQ) {
                 getColumnSafe(cursor, MediaStore.Audio.Media.DISPLAY_NAME)
             } else null
 
@@ -101,16 +101,20 @@ class MusicScanner(private val context: Context) {
                         val id = getLongSafe(c, idCol)
                         if (id == null || id <= 0) continue
                         val duration = getLongSafe(c, durationCol) ?: 0L
-                        if (duration <= 0) continue
 
                         val genre = getStringSafe(c, genreCol) ?: genreMap[id] ?: "Unknown"
                         var path = getStringSafe(c, dataCol) ?: ""
-                        
-                        if (path.isBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+                        if (path.isBlank() && isAtLeastQ) {
                             val relPath = getStringSafe(c, relativePathCol) ?: ""
                             val displayName = getStringSafe(c, displayNameCol) ?: ""
                             if (relPath.isNotBlank() && displayName.isNotBlank()) {
-                                path = "/storage/emulated/0/$relPath$displayName"
+                                val storageDir = try {
+                                    Environment.getExternalStorageDirectory().absolutePath
+                                } catch (e: Exception) {
+                                    "/storage/emulated/0"
+                                }
+                                path = "$storageDir/$relPath$displayName"
                             }
                         }
                         val title = getStringSafe(c, titleCol) ?: "Unknown"
@@ -141,12 +145,12 @@ class MusicScanner(private val context: Context) {
                             )
                         )
                     } catch (e: Exception) {
-                        Log.w("MusicScanner", "Error processing song row", e)
+                        Timber.w(e, "Error processing song row")
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e("MusicScanner", "Error scanning audio files", e)
+            Timber.e(e, "Error scanning audio files")
         }
         return songs
     }
@@ -156,7 +160,7 @@ class MusicScanner(private val context: Context) {
             val idx = cursor.getColumnIndex(columnName)
             if (idx >= 0) idx else null
         } catch (e: Exception) {
-            Log.w("MusicScanner", "Column not found: $columnName")
+            Timber.w(e, "Column not found: $columnName")
             null
         }
     }
@@ -205,7 +209,7 @@ class MusicScanner(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.w("MusicScanner", "Error building genre map", e)
+            Timber.w(e, "Error building genre map")
         }
         return genreMap
     }

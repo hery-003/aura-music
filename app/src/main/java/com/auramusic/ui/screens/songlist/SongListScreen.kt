@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
 import com.auramusic.R
 import com.auramusic.domain.model.Song
 import com.auramusic.ui.components.AnimatedListItem
@@ -32,6 +33,8 @@ fun SongListScreen(
     onToggleFavorite: (Song) -> Unit,
     onSongMoreOptions: (Long) -> Unit,
     onDeleteSong: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
     onBack: () -> Unit,
     onPlayAll: () -> Unit = {},
     onShufflePlay: () -> Unit = {},
@@ -97,7 +100,7 @@ fun SongListScreen(
             ) {
                 item {
                     Text(
-                        text = "${songs.size} ${stringResource(R.string.songs).lowercase()}",
+                        text = LocalResources.current.getQuantityString(R.plurals.song_count, songs.size, songs.size),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
@@ -109,6 +112,8 @@ fun SongListScreen(
                             song = song,
                             onClick = { onPlaySong(song) },
                             onFavoriteToggle = { onToggleFavorite(song) },
+                            onPlayNext = { onPlayNext(song) },
+                            onAddToQueue = { onAddToQueue(song) },
                             onAddToPlaylist = { onSongMoreOptions(song.id) },
                             onDeleteSong = { onDeleteSong(song) },
                             isCurrentlyPlaying = song.id == currentSongId

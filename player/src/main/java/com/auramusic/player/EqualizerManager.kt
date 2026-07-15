@@ -6,6 +6,7 @@ import android.media.audiofx.Virtualizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 
 class EqualizerManager {
 
@@ -43,7 +44,7 @@ class EqualizerManager {
 
     suspend fun attach(audioSessionId: Int) {
         if (audioSessionId <= 0) {
-            android.util.Log.w("EqualizerManager", "Invalid audioSessionId: $audioSessionId, skipping attach")
+            Timber.w("Invalid audioSessionId: $audioSessionId, skipping attach")
             return
         }
         if (audioSessionId == currentAudioSession) return
@@ -69,7 +70,7 @@ class EqualizerManager {
             _bandFrequencies.value = freqs
             applyPreset(_currentPreset.value)
         } catch (e: Exception) {
-            android.util.Log.e("EqualizerManager", "Error creating audio effects", e)
+            Timber.e(e, "Error creating audio effects")
             release()
         }
     }
@@ -84,22 +85,24 @@ class EqualizerManager {
 
     fun setBandLevel(bandIndex: Int, levelMillibels: Short) {
         ensureEffects()
+        val levels = _bandLevels.value.toMutableList()
+        if (bandIndex < levels.size) {
+            levels[bandIndex] = levelMillibels.toFloat()
+            _bandLevels.value = levels
+        }
+
         val eq = equalizer ?: return
         try {
-            val minDb = eq.getBandLevelRange()[0].toInt()
-            val maxDb = eq.getBandLevelRange()[1].toInt()
+            val range = eq.getBandLevelRange()
+            val minDb = range.getOrElse(0) { -1500 }.toInt()
+            val maxDb = range.getOrElse(1) { 1500 }.toInt()
             val clamped = levelMillibels.toInt().coerceIn(minDb, maxDb).toShort()
             eq.setBandLevel(bandIndex.toShort(), clamped)
-            val levels = _bandLevels.value.toMutableList()
-            if (bandIndex < levels.size) {
-                levels[bandIndex] = clamped.toFloat()
-                _bandLevels.value = levels
-            }
             if (_currentPreset.value != PRESET_CUSTOM) {
                 _currentPreset.value = PRESET_CUSTOM
             }
         } catch (e: Exception) {
-            android.util.Log.e("EqualizerManager", "setBandLevel failed", e)
+            Timber.e(e, "setBandLevel failed")
         }
     }
 
@@ -107,7 +110,7 @@ class EqualizerManager {
         val eq = equalizer ?: return Pair(-1500, 1500)
         return try {
             val range = eq.bandLevelRange
-            Pair(range[0].toInt(), range[1].toInt())
+            Pair(range.getOrElse(0) { -1500 }.toInt(), range.getOrElse(1) { 1500 }.toInt())
         } catch (e: Exception) {
             Pair(-1500, 1500)
         }
@@ -117,14 +120,20 @@ class EqualizerManager {
         if (bandsCsv.isBlank()) return
         try {
             val values = bandsCsv.split(",").mapNotNull { it.trim().toShortOrNull() }
+            _bandLevels.value = values.map { it.toFloat() }
+
             val eq = equalizer ?: return
             val bands = eq.numberOfBands.toInt()
             val taken = values.take(bands)
+            val range = eq.getBandLevelRange()
+            val minDb = range.getOrElse(0) { -1500 }.toInt()
+            val maxDb = range.getOrElse(1) { 1500 }.toInt()
             for (i in taken.indices) {
-                setBandLevel(i, taken[i])
+                val clamped = taken[i].toInt().coerceIn(minDb, maxDb).toShort()
+                eq.setBandLevel(i.toShort(), clamped)
             }
         } catch (e: Exception) {
-            android.util.Log.e("EqualizerManager", "loadCustomBands failed", e)
+            Timber.e(e, "loadCustomBands failed")
         }
     }
 
@@ -137,8 +146,9 @@ class EqualizerManager {
         val bb = bassBoost ?: return
         try {
             val bands = eq.numberOfBands.toInt()
-            val minDb = eq.getBandLevelRange()[0].toInt()
-            val maxDb = eq.getBandLevelRange()[1].toInt()
+            val range = eq.getBandLevelRange()
+            val minDb = range.getOrElse(0) { -1500 }.toInt()
+            val maxDb = range.getOrElse(1) { 1500 }.toInt()
             val centers = (0 until bands).map { eq.getCenterFreq(it.toShort()) }
 
             when (preset) {
@@ -238,6 +248,16 @@ class EqualizerManager {
                     bb.setStrength(50)
                     virtualizer?.setStrength(0)
                 }
+                PRESET_CUSTOM -> {
+                    val savedLevels = _bandLevels.value
+                    if (savedLevels.isNotEmpty()) {
+                        for (i in 0 until bands.coerceAtMost(savedLevels.size)) {
+                            eq.setBandLevel(i.toShort(), savedLevels[i].toInt().coerceIn(minDb, maxDb).toShort())
+                        }
+                    }
+                    bb.setStrength(0)
+                    virtualizer?.setStrength(0)
+                }
             }
 
             val levels = List(bands) { i ->
@@ -245,7 +265,7 @@ class EqualizerManager {
             }
             _bandLevels.value = levels
         } catch (e: Exception) {
-            android.util.Log.e("EqualizerManager", "applyPreset failed", e)
+            Timber.e(e, "applyPreset failed")
         }
     }
 
@@ -255,7 +275,7 @@ class EqualizerManager {
             bassBoost?.release()
             virtualizer?.release()
         } catch (e: Exception) {
-            android.util.Log.e("EqualizerManager", "Error releasing audio effects", e)
+            Timber.e(e, "Error releasing audio effects")
         }
         equalizer = null
         bassBoost = null

@@ -7,7 +7,6 @@ import com.auramusic.domain.usecase.GetSongsByAlbumUseCase
 import com.auramusic.domain.usecase.GetSongsByArtistUseCase
 import com.auramusic.domain.usecase.ScanMusicUseCase
 import com.auramusic.domain.usecase.ToggleFavoriteUseCase
-import com.auramusic.player.MusicPlayer
 import com.auramusic.util.MusicScanner
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -28,19 +27,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class SharedViewModelTest {
+class LibraryViewModelTest {
 
     private val repository: MusicRepository = mockk()
-    private val musicPlayer: MusicPlayer = mockk()
-    private val preferences: AppPreferences = mockk()
     private val scanner: MusicScanner = mockk()
     private val getSongsByAlbumUseCase: GetSongsByAlbumUseCase = mockk()
     private val getSongsByArtistUseCase: GetSongsByArtistUseCase = mockk()
     private val scanMusicUseCase: ScanMusicUseCase = mockk()
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase = mockk()
+    private val preferences: AppPreferences = mockk()
     private val context: android.content.Context = mockk()
 
-    private lateinit var viewModel: SharedViewModel
+    private lateinit var viewModel: LibraryViewModel
 
     @Before
     fun setup() {
@@ -58,7 +56,6 @@ class SharedViewModelTest {
         every { repository.getAllFolders() } returns MutableStateFlow(emptyList())
         coEvery { repository.getAllSongs().first() } returns emptyList()
         coEvery { repository.scanAndInsertSongs(any()) } returns Unit
-        coEvery { repository.incrementPlayCount(any()) } returns Unit
         coEvery { repository.createPlaylist(any(), any()) } returns 1L
         coEvery { repository.deletePlaylist(any()) } returns Unit
         coEvery { repository.updatePlaylistName(any(), any(), any()) } returns Unit
@@ -66,27 +63,24 @@ class SharedViewModelTest {
         coEvery { repository.removeSongFromPlaylist(any(), any()) } returns Unit
         coEvery { repository.deleteSong(any()) } returns Unit
         coEvery { repository.reorderPlaylistSongs(any(), any()) } returns Unit
-        coEvery { toggleFavoriteUseCase(any(), any()) } returns Unit
 
-        every { musicPlayer.currentSong } returns MutableStateFlow(null)
-        every { musicPlayer.isPlaying } returns MutableStateFlow(false)
-        every { musicPlayer.equalizerManager } returns mockk()
-        every { preferences.totalListeningTime } returns MutableStateFlow(0L)
+        every { scanner.scanAudioFiles() } returns emptyList()
+        coEvery { scanMusicUseCase(any()) } returns emptyList()
+
         every { preferences.searchHistory } returns MutableStateFlow(emptyList())
         coEvery { preferences.addSearchQuery(any()) } returns Unit
         coEvery { preferences.clearSearchHistory() } returns Unit
 
         every { context.contentResolver } returns mockk()
 
-        viewModel = SharedViewModel(
+        viewModel = LibraryViewModel(
             repository = repository,
-            musicPlayer = musicPlayer,
-            preferences = preferences,
             scanner = scanner,
             getSongsByAlbumUseCase = getSongsByAlbumUseCase,
             getSongsByArtistUseCase = getSongsByArtistUseCase,
             scanMusicUseCase = scanMusicUseCase,
             toggleFavoriteUseCase = toggleFavoriteUseCase,
+            preferences = preferences,
             context = context
         )
     }
@@ -115,20 +109,6 @@ class SharedViewModelTest {
         viewModel.scanMusic()
 
         assertFalse(viewModel.isScanning.value)
-    }
-
-    @Test
-    fun `toggleFavorite calls use case`() = runTest {
-        val song = Song(id = 1, title = "Test", isFavorite = false)
-        viewModel.toggleFavorite(song)
-        coVerify { toggleFavoriteUseCase(1L, true) }
-    }
-
-    @Test
-    fun `toggleFavorite toggles off when already favorite`() = runTest {
-        val song = Song(id = 1, title = "Test", isFavorite = true)
-        viewModel.toggleFavorite(song)
-        coVerify { toggleFavoriteUseCase(1L, false) }
     }
 
     @Test

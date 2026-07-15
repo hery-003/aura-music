@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.auramusic.R
@@ -183,7 +184,7 @@ fun PlaylistDetailScreen(
                         }
                     }
                     IconButton(onClick = onExportPlaylist) {
-                        Icon(Icons.Rounded.Share, contentDescription = "Export playlist", tint = MaterialTheme.colorScheme.onBackground)
+                        Icon(Icons.Rounded.Share, contentDescription = stringResource(R.string.export_playlist), tint = MaterialTheme.colorScheme.onBackground)
                     }
                     IconButton(onClick = { showDeleteDialog = true }) {
                         Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.delete_playlist_cd), tint = Color(0xFFFF4444))
@@ -224,7 +225,7 @@ fun PlaylistDetailScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "${songs.size} song${if (songs.size != 1) "s" else ""}",
+                        text = LocalResources.current.getQuantityString(R.plurals.song_count, songs.size, songs.size),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )

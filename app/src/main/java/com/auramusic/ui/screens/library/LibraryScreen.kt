@@ -49,6 +49,8 @@ fun LibraryScreen(
     onPlaySong: (Song) -> Unit,
     onToggleFavorite: (Song) -> Unit,
     onSongMoreOptions: (Song) -> Unit = {},
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
     onDeleteSong: (Song) -> Unit = {},
     onNavigateToPlaylist: (Long) -> Unit,
     onNavigateToNowPlaying: (Long) -> Unit,
@@ -58,6 +60,8 @@ fun LibraryScreen(
     onAlbumClick: (Long) -> Unit = {},
     onGenreClick: (String) -> Unit = {},
     onFolderClick: (String) -> Unit = {},
+    onPlayAll: () -> Unit = {},
+    onShufflePlay: () -> Unit = {},
     currentSongId: Long? = null
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -122,7 +126,11 @@ fun LibraryScreen(
                         onToggleFavorite = onToggleFavorite,
                         onNavigateToNowPlaying = onNavigateToNowPlaying,
                         onSongMoreOptions = onSongMoreOptions,
+                        onPlayNext = onPlayNext,
+                        onAddToQueue = onAddToQueue,
                         onDeleteSong = onDeleteSong,
+                        onPlayAll = onPlayAll,
+                        onShufflePlay = onShufflePlay,
                         currentSongId = currentSongId
                     )
                     TabType.ARTISTS -> ArtistsTab(
@@ -179,13 +187,42 @@ private fun LibraryTabChip(icon: ImageVector, label: String, selected: Boolean, 
 }
 
 @Composable
-private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavorite: (Song) -> Unit, onNavigateToNowPlaying: (Long) -> Unit, onSongMoreOptions: (Song) -> Unit = {}, onDeleteSong: (Song) -> Unit = {}, currentSongId: Long? = null) {
+private fun SongsTab(songs: List<Song>, onPlaySong: (Song) -> Unit, onToggleFavorite: (Song) -> Unit, onNavigateToNowPlaying: (Long) -> Unit, onSongMoreOptions: (Song) -> Unit = {}, onPlayNext: (Song) -> Unit = {}, onAddToQueue: (Song) -> Unit = {}, onDeleteSong: (Song) -> Unit = {}, onPlayAll: () -> Unit = {}, onShufflePlay: () -> Unit = {}, currentSongId: Long? = null) {
     if (songs.isEmpty()) {
         EmptyState(icon = { Icon(Icons.Rounded.MusicNote, stringResource(R.string.cd_no_songs), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(64.dp)) }, title = stringResource(R.string.no_songs_found), subtitle = stringResource(R.string.empty_library))
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onShufflePlay,
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.shuffle), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.shuffle_play), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+                    }
+                    OutlinedButton(
+                        onClick = onPlayAll,
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground)
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = stringResource(R.string.play), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.play_all), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
             items(songs, key = { it.id }) { song ->
-                SongItem(song = song, onClick = { onPlaySong(song); onNavigateToNowPlaying(song.id) }, onFavoriteToggle = { onToggleFavorite(song) }, onAddToPlaylist = { onSongMoreOptions(song) }, onDeleteSong = { onDeleteSong(song) }, isCurrentlyPlaying = song.id == currentSongId)
+                SongItem(song = song, onClick = { onPlaySong(song); onNavigateToNowPlaying(song.id) }, onFavoriteToggle = { onToggleFavorite(song) }, onPlayNext = { onPlayNext(song) }, onAddToQueue = { onAddToQueue(song) }, onAddToPlaylist = { onSongMoreOptions(song) }, onDeleteSong = { onDeleteSong(song) }, isCurrentlyPlaying = song.id == currentSongId)
             }
         }
     }

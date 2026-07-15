@@ -161,7 +161,7 @@ fun SongItem(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Play Next") },
+                            text = { Text(stringResource(R.string.play_next)) },
                             onClick = {
                                 showMenu = false
                                 onPlayNext()
@@ -169,7 +169,7 @@ fun SongItem(
                             leadingIcon = { Icon(Icons.Rounded.PlaylistPlay, null) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Add to Queue") },
+                            text = { Text(stringResource(R.string.add_to_queue)) },
                             onClick = {
                                 showMenu = false
                                 onAddToQueue()

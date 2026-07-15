@@ -19,7 +19,9 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.auramusic.data.preferences.AppPreferences
-import com.auramusic.ui.components.SharedViewModel
+import com.auramusic.ui.components.LibraryViewModel
+import com.auramusic.ui.components.PlayerViewModel
+import com.auramusic.ui.components.SettingsViewModel
 import com.auramusic.ui.navigation.AppNavigation
 import com.auramusic.ui.theme.AuraMusicTheme
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +30,9 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private val sharedViewModel: SharedViewModel by viewModels()
+    private val playerViewModel: PlayerViewModel by viewModels()
+    private val libraryViewModel: LibraryViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
 
     private var _hasAudioPermission = false
     val hasAudioPermission: Boolean get() = _hasAudioPermission
@@ -78,17 +82,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val themeMode by sharedViewModel.preferences.themeMode
+            val themeMode by settingsViewModel.preferences.themeMode
                 .collectAsStateWithLifecycle(initialValue = AppPreferences.THEME_AMOLED)
-            val accentColor by sharedViewModel.preferences.accentColor
-                .collectAsStateWithLifecycle(initialValue = 0xFF8B5CF6L)
+            val accentColor by settingsViewModel.preferences.accentColor
+                .collectAsStateWithLifecycle(initialValue = 0xFF8B5CF6.toInt())
 
             AuraMusicTheme(themeMode = themeMode, accentColor = Color(accentColor)) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(sharedViewModel = sharedViewModel)
+                    AppNavigation(
+                        playerViewModel = playerViewModel,
+                        libraryViewModel = libraryViewModel,
+                        settingsViewModel = settingsViewModel
+                    )
                 }
             }
         }

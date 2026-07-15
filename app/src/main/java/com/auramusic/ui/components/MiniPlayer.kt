@@ -56,13 +56,13 @@ fun MiniPlayer(
                     remember(id) { context.getAlbumArtUri(id) }
                 }
 
-                val infiniteTransition = rememberInfiniteTransition(label = "mini_art")
+                val infiniteTransition = rememberInfiniteTransition(label = "mini_player")
                 val rotation by infiniteTransition.animateFloat(
                     initialValue = 0f,
                     targetValue = 360f,
                     animationSpec = infiniteRepeatable(
-                        tween(8000, easing = LinearEasing),
-                        RepeatMode.Restart
+                        animation = tween(8000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
                     ),
                     label = "mini_art_rotate"
                 )
@@ -70,8 +70,8 @@ fun MiniPlayer(
                     initialValue = 0f,
                     targetValue = 360f,
                     animationSpec = infiniteRepeatable(
-                        tween(3000, easing = LinearEasing),
-                        RepeatMode.Restart
+                        animation = tween(3000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
                     ),
                     label = "mini_rainbow_hue"
                 )

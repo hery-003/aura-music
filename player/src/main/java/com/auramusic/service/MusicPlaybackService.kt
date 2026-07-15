@@ -11,7 +11,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.SystemClock
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -30,6 +29,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -40,7 +40,7 @@ class MusicPlaybackService : MediaSessionService() {
     @Inject lateinit var preferences: AppPreferences
 
     private var mediaSession: MediaSession? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, e -> Log.e("MusicPlaybackService", "Unhandled coroutine exception", e) })
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, e -> Timber.e(e, "Unhandled coroutine exception") })
     private var notificationUpdateJob: Job? = null
     private var sessionPendingIntent: PendingIntent? = null
 
@@ -49,7 +49,7 @@ class MusicPlaybackService : MediaSessionService() {
         try {
             val player = musicPlayer.exoPlayer
             if (player == null) {
-                Log.w("MusicPlaybackService", "ExoPlayer is null, stopping service")
+                Timber.w("ExoPlayer is null, stopping service")
                 stopSelf()
                 return
             }
@@ -92,7 +92,7 @@ class MusicPlaybackService : MediaSessionService() {
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e("MusicPlaybackService", "onPlayerCommandRequest failed", e)
+                        Timber.e(e, "onPlayerCommandRequest failed")
                         return SessionResult.RESULT_ERROR_UNKNOWN
                     }
                     return SessionResult.RESULT_SUCCESS
@@ -118,20 +118,20 @@ class MusicPlaybackService : MediaSessionService() {
                     .setSessionActivity(sessionPendingIntent!!)
                 builder.build()
             } catch (e: Exception) {
-                Log.e("MusicPlaybackService", "MediaSession creation failed", e)
+                Timber.e(e, "MediaSession creation failed")
                 try {
                     MediaSession.Builder(this, player)
                         .setCallback(sessionCallback)
                         .build()
                 } catch (e2: Exception) {
-                    Log.e("MusicPlaybackService", "Fallback MediaSession also failed", e2)
+                    Timber.e(e2, "Fallback MediaSession also failed")
                     stopSelf()
                     return
                 }
             }
 
             val session = mediaSession ?: run {
-                Log.e("MusicPlaybackService", "MediaSession is null, stopping service")
+                Timber.e(IllegalStateException("MediaSession is null"), "MediaSession is null, stopping service")
                 stopSelf()
                 return
             }
@@ -145,7 +145,7 @@ class MusicPlaybackService : MediaSessionService() {
             try {
                 startForeground(NOTIFICATION_ID, buildNotification(initialTitle, initialArtist, null))
             } catch (e: Exception) {
-                Log.e("MusicPlaybackService", "startForeground failed", e)
+                Timber.e(e, "startForeground failed")
             }
 
             lastNotificationSongId = currentSong?.id ?: -1L
@@ -153,7 +153,7 @@ class MusicPlaybackService : MediaSessionService() {
 
             startPositionUpdates()
         } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "Service onCreate failed", e)
+            Timber.e(e, "Service onCreate failed")
             try { stopSelf() } catch (_: Exception) {}
         }
     }
@@ -175,7 +175,7 @@ class MusicPlaybackService : MediaSessionService() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "onStartCommand failed", e)
+            Timber.e(e, "onStartCommand failed")
         }
         return START_NOT_STICKY
     }
@@ -183,11 +183,11 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         try {
             val player = musicPlayer.exoPlayer ?: return
-            if (!player.playWhenReady || player.mediaItemCount == 0) {
+            if (player.mediaItemCount == 0) {
                 stopSelf()
             }
         } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "onTaskRemoved failed", e)
+            Timber.e(e, "onTaskRemoved failed")
             stopSelf()
         }
     }
@@ -215,7 +215,7 @@ class MusicPlaybackService : MediaSessionService() {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "createNotificationChannel failed", e)
+            Timber.e(e, "createNotificationChannel failed")
         }
     }
 
@@ -283,13 +283,13 @@ class MusicPlaybackService : MediaSessionService() {
                     if (session != null) {
                         setStyle(
                             MediaStyleNotificationHelper.MediaStyle(session)
-                                .setShowActionsInCompactView(0, 1, 2) // Previous, Play/Pause, Next
+                                .setShowActionsInCompactView(0, 1, 2)
                         )
                     }
                 }
                 .build()
         } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "buildNotification failed", e)
+            Timber.e(e, "buildNotification failed")
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_splash_logo)
                 .setContentTitle(getString(R.string.app_name))
@@ -317,7 +317,7 @@ class MusicPlaybackService : MediaSessionService() {
                     try {
                         musicPlayer.updatePosition()
                     } catch (e: Exception) {
-                        Log.e("MusicPlaybackService", "Error updating position", e)
+                        Timber.e(e, "Error updating position")
                     }
 
                     if (isPlaying) {
@@ -331,7 +331,7 @@ class MusicPlaybackService : MediaSessionService() {
                             }
                             lastPlayingTickMs = now
                         } catch (e: Exception) {
-                            Log.e("MusicPlaybackService", "Error updating listening time", e)
+                            Timber.e(e, "Error updating listening time")
                         }
                     } else {
                         lastPlayingTickMs = 0L
@@ -350,14 +350,14 @@ class MusicPlaybackService : MediaSessionService() {
                                         this@MusicPlaybackService.getAlbumArtBitmap(song.albumId)
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("MusicPlaybackService", "Error getting album art", e)
+                                    Timber.e(e, "Error getting album art")
                                     null
                                 }
                                 val notification = buildNotification(song.title, song.artistDisplay, albumArtBitmap)
                                 val manager = try {
                                     getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                                 } catch (e: Exception) {
-                                    Log.e("MusicPlaybackService", "Error getting notification manager", e)
+                                    Timber.e(e, "Error getting notification manager")
                                     null
                                 }
                                 manager?.notify(NOTIFICATION_ID, notification)
@@ -365,7 +365,7 @@ class MusicPlaybackService : MediaSessionService() {
                             lastNotificationSongId = song?.id ?: -1L
                             lastNotificationIsPlaying = isPlaying
                         } catch (e: Exception) {
-                            Log.e("MusicPlaybackService", "Error building notification", e)
+                            Timber.e(e, "Error building notification")
                         }
 
                         try {
@@ -386,12 +386,12 @@ class MusicPlaybackService : MediaSessionService() {
                                             albumArtBitmap
                                         )
                                     } catch (e: Exception) {
-                                        Log.e("MusicPlaybackService", "Error updating widget $id", e)
+                                        Timber.e(e, "Error updating widget $id")
                                     }
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e("MusicPlaybackService", "Error updating widgets", e)
+                            Timber.e(e, "Error updating widgets")
                         } finally {
                             albumArtBitmap?.recycle()
                         }
@@ -400,7 +400,7 @@ class MusicPlaybackService : MediaSessionService() {
                     delay(1000)
                 }
             } catch (e: Exception) {
-                Log.e("MusicPlaybackService", "Error in position updates loop", e)
+                Timber.e(e, "Error in position updates loop")
             }
         }
     }

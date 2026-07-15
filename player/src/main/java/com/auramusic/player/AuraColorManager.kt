@@ -1,7 +1,6 @@
 package com.auramusic.player
 
 import android.graphics.Bitmap
-import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 enum class AuraMode {
     DEFAULT,
@@ -27,7 +27,7 @@ class AuraColorManager {
 
     suspend fun extractFromBitmap(bitmap: Bitmap?) {
         if (bitmap == null) {
-            Log.w("AuraColorManager", "Bitmap is null, skipping color extraction")
+            Timber.w("Bitmap is null, skipping color extraction")
             return
         }
         withContext(Dispatchers.Default) {
@@ -41,10 +41,10 @@ class AuraColorManager {
                         blue = argb and 0xFF,
                         alpha = 0xFF
                     )
-                    Log.d("AuraColorManager", "Extracted dominant color: $argb")
+                    Timber.d("Extracted dominant color: $argb")
                 }
             }.onFailure { e ->
-                Log.e("AuraColorManager", "Error extracting colors from bitmap", e)
+                Timber.e(e, "Error extracting colors from bitmap")
             }
         }
     }
@@ -87,7 +87,7 @@ class AuraColorManager {
 
             else -> AuraMode.DEFAULT
         }
-        Log.d("AuraColorManager", "Updated aura mode to ${_auraMode.value} for genre: $genre")
+        Timber.d("Updated aura mode to ${_auraMode.value} for genre: $genre")
     }
 
     fun reset() {

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.abs
 import kotlin.math.sqrt
+import timber.log.Timber
 
 class FftVisualizer {
 
@@ -38,7 +39,7 @@ class FftVisualizer {
 
     suspend fun attach(audioSessionId: Int) {
         if (audioSessionId <= 0) {
-            android.util.Log.w("FftVisualizer", "Invalid audioSessionId: $audioSessionId, skipping attach")
+            Timber.w("Invalid audioSessionId: $audioSessionId, skipping attach")
             return
         }
         if (audioSessionId == currentAudioSession) return
@@ -72,9 +73,9 @@ class FftVisualizer {
             )
             visualizer?.enabled = true
             _isActive.value = true
-            android.util.Log.d("FftVisualizer", "Visualizer attached to session $audioSessionId")
+            Timber.d("Visualizer attached to session $audioSessionId")
         } catch (e: Exception) {
-            android.util.Log.e("FftVisualizer", "Error creating Visualizer for session $audioSessionId", e)
+            Timber.e(e, "Error creating Visualizer for session $audioSessionId")
             release()
         }
     }
@@ -120,7 +121,7 @@ class FftVisualizer {
             _fftMagnitudes.value = magnitudesBuffer.toList()
             detectBeat(energySum / DEFAULT_BARS)
         } catch (e: Exception) {
-            android.util.Log.e("FftVisualizer", "Error processing FFT data", e)
+            Timber.e(e, "Error processing FFT data")
         }
     }
 
@@ -159,7 +160,7 @@ class FftVisualizer {
             }
             _waveform.value = smoothedWaveform.toList()
         } catch (e: Exception) {
-            android.util.Log.e("FftVisualizer", "Error processing waveform", e)
+            Timber.e(e, "Error processing waveform")
         }
     }
 
@@ -168,7 +169,7 @@ class FftVisualizer {
             visualizer?.enabled = false
             visualizer?.release()
         } catch (e: Exception) {
-            android.util.Log.e("FftVisualizer", "Error releasing visualizer", e)
+            Timber.e(e, "Error releasing visualizer")
         }
         visualizer = null
         currentAudioSession = -1

@@ -18,9 +18,13 @@ interface MusicRepository {
     fun getRecentlyAdded(limit: Int): Flow<List<Song>>
     suspend fun toggleFavorite(songId: Long, isFavorite: Boolean)
     suspend fun incrementPlayCount(songId: Long)
+    suspend fun getSongCount(): Int
+    suspend fun getArtistCount(): Int
+    suspend fun getAlbumCount(): Int
     suspend fun scanAndInsertSongs(songs: List<Song>)
     suspend fun deleteSong(songId: Long)
     suspend fun clearAllSongs()
+    suspend fun deleteSongsNotInIds(ids: List<Long>)
 
     fun getAllPlaylists(): Flow<List<Playlist>>
     fun getPlaylistById(id: Long): Flow<Playlist?>

@@ -2,9 +2,23 @@ package com.auramusic.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "songs")
+@Entity(
+    tableName = "songs",
+    indices = [
+        Index(value = ["artist"]),
+        Index(value = ["album"]),
+        Index(value = ["album_id"]),
+        Index(value = ["genre"]),
+        Index(value = ["path"]),
+        Index(value = ["is_favorite"]),
+        Index(value = ["play_count"]),
+        Index(value = ["last_played"]),
+        Index(value = ["date_added"])
+    ]
+)
 data class SongEntity(
     @PrimaryKey
     val id: Long = 0,

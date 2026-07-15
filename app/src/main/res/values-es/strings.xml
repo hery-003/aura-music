@@ -43,6 +43,7 @@
     <string name="back">Atrás</string>
     <string name="search_hint">Busca canciones, artistas, listas…</string>
     <string name="clear">Limpiar</string>
+    <string name="clear_all">Limpiar todo</string>
     <string name="search_your_music">Busca tu música</string>
     <string name="search_subtitle">Encuentra canciones, artistas, listas y carpetas</string>
     <string name="no_results">Sin resultados</string>
@@ -170,6 +171,9 @@
     <string name="import_playlist">Importar lista</string>
     <string name="error_import_playlist">Error al importar la lista</string>
     <string name="playlist_imported">Lista importada correctamente</string>
+    <string name="appearance">Apariencia</string>
+    <string name="playback">Reproducción</string>
+    <string name="system">Sistema</string>
     <string name="playback_speed">Velocidad de reproducción</string>
     <string name="night_vibes">Vibra nocturna</string>
     <string name="good_morning">Buenos días</string>

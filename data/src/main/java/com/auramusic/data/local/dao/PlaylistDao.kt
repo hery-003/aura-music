@@ -55,6 +55,12 @@ interface PlaylistDao {
     suspend fun clearPlaylist(playlistId: Long)
 
     @Transaction
+    suspend fun deletePlaylistCascade(playlistId: Long) {
+        clearPlaylist(playlistId)
+        deletePlaylistById(playlistId)
+    }
+
+    @Transaction
     suspend fun reorderPlaylistSongs(playlistId: Long, songIds: List<Long>) {
         clearPlaylist(playlistId)
         songIds.forEachIndexed { index, songId ->
@@ -76,6 +82,9 @@ interface PlaylistDao {
 
     @Query("SELECT p.*, COALESCE(COUNT(ps.song_id), 0) AS song_count FROM playlists p LEFT JOIN playlist_songs ps ON p.id = ps.playlist_id WHERE p.name LIKE '%' || :query || '%' GROUP BY p.id ORDER BY p.name ASC")
     fun searchPlaylistsWithCount(query: String): Flow<List<PlaylistWithCount>>
+
+    @Query("DELETE FROM playlist_songs WHERE song_id IN (:songIds)")
+    suspend fun removeSongsFromAllPlaylists(songIds: List<Long>)
 }
 
 data class PlaylistWithCount(

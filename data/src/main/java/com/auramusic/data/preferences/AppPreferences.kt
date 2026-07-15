@@ -29,7 +29,7 @@ class AppPreferences(private val context: Context) {
         private val SHOW_VISUALIZER = booleanPreferencesKey("show_visualizer")
         private val GAMER_MODE = booleanPreferencesKey("gamer_mode")
         private val TOTAL_LISTENING_TIME = longPreferencesKey("total_listening_time")
-        private val ACCENT_COLOR = longPreferencesKey("accent_color")
+        private val ACCENT_COLOR = intPreferencesKey("accent_color")
         private val CUSTOM_EQ_BANDS = stringPreferencesKey("custom_eq_bands")
         private val AUDIO_QUALITY = intPreferencesKey("audio_quality")
         private val ANIMATIONS_ENABLED = booleanPreferencesKey("animations_enabled")
@@ -58,23 +58,25 @@ class AppPreferences(private val context: Context) {
             emit(emptyPreferences())
         }
 
-    val themeMode: Flow<Int> = dataStoreFlow.map { it[THEME_MODE] ?: THEME_AMOLED }
-    val equalizerPreset: Flow<Int> = dataStoreFlow.map { it[EQUALIZER_PRESET] ?: 0 }
+    private fun safeInt(value: Any?, default: Int): Int = (value as? Number)?.toInt() ?: default
+
+    val themeMode: Flow<Int> = dataStoreFlow.map { safeInt(it[THEME_MODE], THEME_AMOLED) }
+    val equalizerPreset: Flow<Int> = dataStoreFlow.map { safeInt(it[EQUALIZER_PRESET], 0) }
     val crossfadeEnabled: Flow<Boolean> = dataStoreFlow.map { it[CROSSFADE_ENABLED] ?: false }
-    val crossfadeDuration: Flow<Int> = dataStoreFlow.map { it[CROSSFADE_DURATION] ?: 3 }
+    val crossfadeDuration: Flow<Int> = dataStoreFlow.map { safeInt(it[CROSSFADE_DURATION], 3) }
     val sleepTimerDuration: Flow<Long> = dataStoreFlow.map { it[SLEEP_TIMER_DURATION] ?: 0L }
     val sleepTimerActive: Flow<Boolean> = dataStoreFlow.map { it[SLEEP_TIMER_ACTIVE] ?: false }
     val shuffleMode: Flow<Boolean> = dataStoreFlow.map { it[SHUFFLE_MODE] ?: false }
-    val repeatMode: Flow<Int> = dataStoreFlow.map { it[REPEAT_MODE] ?: REPEAT_ALL }
+    val repeatMode: Flow<Int> = dataStoreFlow.map { safeInt(it[REPEAT_MODE], REPEAT_ALL) }
     val lastPlayedSongId: Flow<Long> = dataStoreFlow.map { it[LAST_PLAYED_SONG_ID] ?: -1L }
     val lastPlayedPosition: Flow<Long> = dataStoreFlow.map { it[LAST_PLAYED_POSITION] ?: 0L }
     val volumeLevel: Flow<Float> = dataStoreFlow.map { it[VOLUME_LEVEL] ?: 1f }
     val showVisualizer: Flow<Boolean> = dataStoreFlow.map { it[SHOW_VISUALIZER] ?: true }
     val gamerMode: Flow<Boolean> = dataStoreFlow.map { it[GAMER_MODE] ?: false }
     val totalListeningTime: Flow<Long> = dataStoreFlow.map { it[TOTAL_LISTENING_TIME] ?: 0L }
-    val accentColor: Flow<Long> = dataStoreFlow.map { it[ACCENT_COLOR] ?: 0xFF8B5CF6L }
+    val accentColor: Flow<Int> = dataStoreFlow.map { safeInt(it[ACCENT_COLOR], 0xFF8B5CF6.toInt()) }
     val customEqBands: Flow<String> = dataStoreFlow.map { it[CUSTOM_EQ_BANDS] ?: "" }
-    val audioQuality: Flow<Int> = dataStoreFlow.map { it[AUDIO_QUALITY] ?: AUDIO_QUALITY_NORMAL }
+    val audioQuality: Flow<Int> = dataStoreFlow.map { safeInt(it[AUDIO_QUALITY], AUDIO_QUALITY_NORMAL) }
     val animationsEnabled: Flow<Boolean> = dataStoreFlow.map { it[ANIMATIONS_ENABLED] ?: true }
     val playbackSpeed: Flow<Float> = dataStoreFlow.map { it[PLAYBACK_SPEED] ?: 1f }
 
@@ -179,7 +181,7 @@ class AppPreferences(private val context: Context) {
         }
     }
 
-    suspend fun setAccentColor(color: Long) {
+    suspend fun setAccentColor(color: Int) {
         context.dataStore.edit { it[ACCENT_COLOR] = color }
     }
 

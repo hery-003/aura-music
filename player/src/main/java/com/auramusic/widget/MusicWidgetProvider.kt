@@ -7,8 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
-import android.util.Log
 import android.widget.RemoteViews
+import timber.log.Timber
 import com.auramusic.player.R
 import com.auramusic.service.MusicPlaybackService
 
@@ -24,11 +24,11 @@ class MusicWidgetProvider : AppWidgetProvider() {
                 try {
                     updateWidget(context, appWidgetManager, appWidgetId, null, null, false, null)
                 } catch (e: Exception) {
-                    Log.e("MusicWidgetProvider", "Error updating widget $appWidgetId", e)
+                    Timber.e(e, "Error updating widget $appWidgetId")
                 }
             }
         } catch (e: Exception) {
-            Log.e("MusicWidgetProvider", "Error in onUpdate", e)
+            Timber.e(e, "Error in onUpdate")
         }
     }
 
@@ -86,7 +86,7 @@ class MusicWidgetProvider : AppWidgetProvider() {
                         PendingIntent.getService(context, 0, prevIntent, flags)
                     )
                 } catch (e: Exception) {
-                    Log.e("MusicWidgetProvider", "Error creating prev intent", e)
+                    Timber.e(e, "Error creating prev intent")
                 }
 
                 try {
@@ -98,7 +98,7 @@ class MusicWidgetProvider : AppWidgetProvider() {
                         PendingIntent.getService(context, 1, playPauseIntent, flags)
                     )
                 } catch (e: Exception) {
-                    Log.e("MusicWidgetProvider", "Error creating play/pause intent", e)
+                    Timber.e(e, "Error creating play/pause intent")
                 }
 
                 try {
@@ -110,12 +110,12 @@ class MusicWidgetProvider : AppWidgetProvider() {
                         PendingIntent.getService(context, 2, nextIntent, flags)
                     )
                 } catch (e: Exception) {
-                    Log.e("MusicWidgetProvider", "Error creating next intent", e)
+                    Timber.e(e, "Error creating next intent")
                 }
 
                 appWidgetManager.updateAppWidget(appWidgetId, views)
             } catch (e: Exception) {
-                Log.e("MusicWidgetProvider", "Error updating widget", e)
+                Timber.e(e, "Error updating widget")
             }
         }
     }

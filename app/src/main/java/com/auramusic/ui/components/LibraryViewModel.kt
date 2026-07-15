@@ -1,11 +1,10 @@
 package com.auramusic.ui.components
 
-import android.annotation.SuppressLint
-import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.MediaStore
+import android.content.ContentUris
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
 import com.auramusic.data.preferences.AppPreferences
@@ -15,28 +14,25 @@ import com.auramusic.domain.model.Playlist
 import com.auramusic.domain.model.Song
 import com.auramusic.domain.repository.MusicRepository
 import com.auramusic.domain.usecase.*
-import com.auramusic.player.EqualizerManager
-import com.auramusic.player.MusicPlayer
-import com.auramusic.service.MusicPlaybackService
 import com.auramusic.util.MusicScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
-class SharedViewModel @Inject constructor(
+class LibraryViewModel @Inject constructor(
     val repository: MusicRepository,
-    val musicPlayer: MusicPlayer,
-    val preferences: AppPreferences,
     private val scanner: MusicScanner,
     private val getSongsByAlbumUseCase: GetSongsByAlbumUseCase,
     private val getSongsByArtistUseCase: GetSongsByArtistUseCase,
     private val scanMusicUseCase: ScanMusicUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
+    private val preferences: AppPreferences,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -81,31 +77,23 @@ class SharedViewModel @Inject constructor(
     val folders = safeFlow { repository.getAllFolders() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val totalListeningTime: StateFlow<Long> = safeFlow { preferences.totalListeningTime }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val songCount: StateFlow<Int> = songs
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val artistCount: StateFlow<Int> = artists
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val albumCount: StateFlow<Int> = albums
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val searchHistory: StateFlow<List<String>> = safeFlow { preferences.searchHistory }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _addToPlaylistSongId = MutableStateFlow<Long?>(null)
     val addToPlaylistSongId: StateFlow<Long?> = _addToPlaylistSongId.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            try {
-                val songList = repository.getAllSongs().first()
-                if (songList.isNotEmpty()) {
-                    val lastId = preferences.lastPlayedSongId.first()
-                    val lastPos = preferences.lastPlayedPosition.first()
-                    if (lastId > 0L && songList.any { it.id == lastId }) {
-                        musicPlayer.restoreState(songList, lastId, lastPos)
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to restore state")
-            }
-        }
-    }
 
     private fun <T> safeFlow(block: () -> Flow<T>): Flow<T> {
         return try {
@@ -124,7 +112,7 @@ class SharedViewModel @Inject constructor(
             _isScanning.value = true
             try {
                 val existingSongs = if (songs.value.isEmpty()) {
-                    repository.getAllSongs().first()
+                    withTimeoutOrNull(3000) { repository.getAllSongs().first() } ?: emptyList()
                 } else {
                     songs.value
                 }
@@ -134,55 +122,6 @@ class SharedViewModel @Inject constructor(
                 Timber.e(e, "scanMusic failed")
             } finally {
                 _isScanning.value = false
-            }
-        }
-    }
-
-    fun playSong(song: Song) {
-        try {
-            musicPlayer.playSong(song)
-            startPlaybackService()
-            viewModelScope.launch {
-                try { repository.incrementPlayCount(song.id) } catch (e: Exception) { Timber.e(e, "Failed to increment play count") }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "playSong failed")
-        }
-    }
-
-    fun playSongNext(song: Song) {
-        try {
-            musicPlayer.playSongNext(song)
-            startPlaybackService()
-        } catch (e: Exception) {
-            Timber.e(e, "playSongNext failed")
-        }
-    }
-
-    fun addToQueue(song: Song) {
-        try {
-            musicPlayer.addToQueue(song)
-        } catch (e: Exception) {
-            Timber.e(e, "addToQueue failed")
-        }
-    }
-
-    @SuppressLint("UnsafeOptInUsageError")
-    fun startPlaybackService() {
-        try {
-            val intent = Intent(context, MusicPlaybackService::class.java)
-            context.startForegroundService(intent)
-        } catch (e: Exception) {
-            Timber.e(e, "startPlaybackService failed")
-        }
-    }
-
-    fun toggleFavorite(song: Song) {
-        viewModelScope.launch {
-            try {
-                toggleFavoriteUseCase(song.id, !song.isFavorite)
-            } catch (e: Exception) {
-                Timber.e(e, "toggleFavorite failed")
             }
         }
     }
@@ -355,86 +294,7 @@ class SharedViewModel @Inject constructor(
         }
     }
 
-    fun setEqualizerPreset(preset: Int) {
-        try {
-            musicPlayer.equalizerManager.setPreset(preset)
-        } catch (e: Exception) { Timber.e(e, "setEqualizerPreset failed") }
-        viewModelScope.launch {
-            try {
-                preferences.setEqualizerPreset(preset)
-            } catch (e: Exception) { Timber.e(e, "Failed to save eq preset") }
-        }
-    }
-
-    fun setCustomEqualizerBand(bandIndex: Int, levelMillibels: Short) {
-        try {
-            musicPlayer.equalizerManager.setBandLevel(bandIndex, levelMillibels)
-        } catch (e: Exception) { Timber.e(e, "setCustomEqualizerBand failed") }
-        viewModelScope.launch {
-            try {
-                preferences.setEqualizerPreset(EqualizerManager.PRESET_CUSTOM)
-                val bands = musicPlayer.equalizerManager.exportCustomBands()
-                preferences.setCustomEqBands(bands)
-            } catch (e: Exception) { Timber.e(e, "Failed to save custom eq bands") }
-        }
-    }
-
-    fun loadCustomEqualizerBands() {
-        viewModelScope.launch {
-            try {
-                preferences.customEqBands.first().let { csv ->
-                    if (csv.isNotBlank()) {
-                        musicPlayer.equalizerManager.loadCustomBands(csv)
-                    }
-                }
-            } catch (e: Exception) { Timber.e(e, "loadCustomEqualizerBands failed") }
-        }
-    }
-
-    fun setCrossfade(enabled: Boolean, durationSec: Int) {
-        musicPlayer.setCrossfade(enabled, durationSec)
-        viewModelScope.launch {
-            try {
-                preferences.setCrossfadeEnabled(enabled)
-                preferences.setCrossfadeDuration(durationSec)
-            } catch (e: Exception) { Timber.e(e, "Failed to save crossfade prefs") }
-        }
-    }
-
-    fun startSleepTimer(minutes: Int) {
-        try {
-            musicPlayer.sleepTimerManager.start(minutes)
-        } catch (e: Exception) { Timber.e(e, "startSleepTimer failed") }
-    }
-
-    fun stopSleepTimer() {
-        try {
-            musicPlayer.sleepTimerManager.stop()
-        } catch (e: Exception) { Timber.e(e, "stopSleepTimer failed") }
-    }
-
-    fun addTimeToSleepTimer(minutes: Int) {
-        try {
-            musicPlayer.sleepTimerManager.addTime(minutes)
-        } catch (e: Exception) { Timber.e(e, "addTimeToSleepTimer failed") }
-    }
-
-    fun setAudioQuality(quality: Int) {
-        viewModelScope.launch {
-            try {
-                preferences.setAudioQuality(quality)
-                musicPlayer.setAudioQuality(quality == AppPreferences.AUDIO_QUALITY_HIGH)
-            } catch (e: Exception) { Timber.e(e, "setAudioQuality failed") }
-        }
-    }
-
-    fun setAnimationsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            try { preferences.setAnimationsEnabled(enabled) } catch (e: Exception) { Timber.e(e, "setAnimationsEnabled failed") }
-        }
-    }
-
-    fun exportPlaylist(context: android.content.Context, playlistId: Long) {
+    fun exportPlaylist(context: Context, playlistId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val playlist = repository.getPlaylistByIdOnce(playlistId) ?: return@launch

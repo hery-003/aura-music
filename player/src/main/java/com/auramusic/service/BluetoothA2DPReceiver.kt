@@ -5,11 +5,11 @@ import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import android.annotation.SuppressLint
 import androidx.core.content.ContextCompat
 import com.auramusic.player.MusicPlayer
 import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -27,7 +27,7 @@ class BluetoothA2DPReceiver : BroadcastReceiver() {
                     val state = try {
                         intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
                     } catch (e: Exception) {
-                        Log.e("BluetoothA2DPReceiver", "Error getting state", e)
+                        Timber.e(e, "Error getting state")
                         return
                     }
                     when (state) {
@@ -41,21 +41,21 @@ class BluetoothA2DPReceiver : BroadcastReceiver() {
                                     }
                                 }
                             } catch (e: Exception) {
-                                Log.e("BluetoothA2DPReceiver", "Error starting service", e)
+                                Timber.e(e, "Error starting service")
                             }
                         }
                         BluetoothProfile.STATE_DISCONNECTED -> {
                             try {
                                 musicPlayer.pause()
                             } catch (e: Exception) {
-                                Log.e("BluetoothA2DPReceiver", "Error pausing", e)
+                                Timber.e(e, "Error pausing")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e("BluetoothA2DPReceiver", "Error in onReceive", e)
+            Timber.e(e, "Error in onReceive")
         }
     }
 }

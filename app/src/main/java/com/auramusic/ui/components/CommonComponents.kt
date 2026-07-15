@@ -80,7 +80,7 @@ fun SectionHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
-            color = if (!animated) MaterialTheme.colorScheme.onBackground else Color.hsl(0f, 0f, 1f, 0.9f),
+            color = if (!animated) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
             fontWeight = FontWeight.Bold
         )
         if (actionText != null && onActionClick != null) {

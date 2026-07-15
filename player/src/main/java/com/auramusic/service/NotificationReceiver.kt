@@ -4,8 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.annotation.SuppressLint
-import android.util.Log
 import androidx.core.content.ContextCompat
+import timber.log.Timber
 
 @SuppressLint("UnsafeOptInUsageError")
 class NotificationReceiver : BroadcastReceiver() {
@@ -24,7 +24,7 @@ class NotificationReceiver : BroadcastReceiver() {
                         }
                         ContextCompat.startForegroundService(context, serviceIntent)
                     } catch (e: Exception) {
-                        Log.e("NotificationReceiver", "Error starting service", e)
+                        Timber.e(e, "Error starting service")
                     }
                 }
                 MusicPlaybackService.ACTION_CLOSE -> {
@@ -32,12 +32,12 @@ class NotificationReceiver : BroadcastReceiver() {
                         val stopIntent = Intent(context, MusicPlaybackService::class.java)
                         context.stopService(stopIntent)
                     } catch (e: Exception) {
-                        Log.e("NotificationReceiver", "Error stopping service", e)
+                        Timber.e(e, "Error stopping service")
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e("NotificationReceiver", "Error in onReceive", e)
+            Timber.e(e, "Error in onReceive")
         }
     }
 }

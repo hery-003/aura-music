@@ -45,7 +45,7 @@ fun SettingsScreen(
     crossfadeDuration: Int,
     showVisualizer: Boolean,
     showGamerMode: Boolean,
-    accentColor: Long,
+    accentColor: Int,
     audioQuality: Int = AppPreferences.AUDIO_QUALITY_NORMAL,
     animationsEnabled: Boolean = true,
     playbackSpeed: Float = 1f,
@@ -55,7 +55,7 @@ fun SettingsScreen(
     bandFrequencies: List<Int> = emptyList(),
     eqBandLevelRange: Pair<Int, Int> = Pair(-1500, 1500),
     onThemeModeChange: (Int) -> Unit,
-    onAccentColorChange: (Long) -> Unit,
+    onAccentColorChange: (Int) -> Unit,
     onEqualizerPresetChange: (Int) -> Unit,
     onCustomBandLevelChange: (Int, Short) -> Unit,
     onCrossfadeEnabledChange: (Boolean) -> Unit,
@@ -99,23 +99,34 @@ fun SettingsScreen(
                 .padding(padding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            item(key = "theme") {
-                SettingsLabel(stringResource(R.string.theme))
+            item(key = "appearance_header") {
+                SettingsLabel(stringResource(R.string.appearance))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
+            }
+
+            item(key = "theme") {
                 ThemeSelector(themeMode = themeMode, onThemeModeChange = onThemeModeChange)
                 Spacer(Modifier.height(12.dp))
                 AccentColorPicker(
                     selectedColor = accentColor,
                     onColorSelected = { onAccentColorChange(it) }
                 )
+                Spacer(Modifier.height(16.dp))
+                AnimationsSection(
+                    enabled = animationsEnabled,
+                    onChange = onAnimationsEnabledChange
+                )
                 Spacer(Modifier.height(24.dp))
             }
 
-            item(key = "equalizer") {
-                SettingsLabel(stringResource(R.string.equalizer))
+            item(key = "audio_header") {
+                SettingsLabel(stringResource(R.string.audio))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
+            }
+
+            item(key = "equalizer") {
                 EqualizerSelector(
                     selectedPreset = equalizerPreset,
                     onPresetChange = onEqualizerPresetChange
@@ -129,26 +140,19 @@ fun SettingsScreen(
                         onBandLevelChange = onCustomBandLevelChange
                     )
                 }
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item(key = "crossfade") {
-                SettingsLabel(stringResource(R.string.crossfade))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
+                AudioQualitySection(
+                    quality = audioQuality,
+                    onChange = onAudioQualityChange
+                )
+                Spacer(Modifier.height(16.dp))
                 CrossfadeSection(
                     enabled = crossfadeEnabled,
                     duration = crossfadeDuration,
                     onEnabledChange = onCrossfadeEnabledChange,
                     onDurationChange = onCrossfadeDurationChange
                 )
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item(key = "visualizer") {
-                SettingsLabel(stringResource(R.string.visualizer))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 VisualizerSection(
                     show = showVisualizer,
                     onChange = onShowVisualizerChange
@@ -156,49 +160,24 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item(key = "audio") {
-                SettingsLabel(stringResource(R.string.audio))
+            item(key = "playback_header") {
+                SettingsLabel(stringResource(R.string.playback))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
-                AudioQualitySection(
-                    quality = audioQuality,
-                    onChange = onAudioQualityChange
-                )
-                Spacer(Modifier.height(16.dp))
-                AnimationsSection(
-                    enabled = animationsEnabled,
-                    onChange = onAnimationsEnabledChange
-                )
-                Spacer(Modifier.height(24.dp))
             }
 
             item(key = "playback_speed") {
-                SettingsLabel(stringResource(R.string.playback_speed))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
                 PlaybackSpeedSection(
                     speed = playbackSpeed,
                     onChange = onPlaybackSpeedChange
                 )
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item(key = "sleep_timer") {
-                SettingsLabel(stringResource(R.string.sleep_timer))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 SleepTimerSettings(
                     isActive = sleepTimerActive,
                     onStart = { minutes -> onSleepTimerStart(minutes) },
                     onStop = onSleepTimerStop
                 )
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item(key = "gamer_mode") {
-                SettingsLabel(stringResource(R.string.gamer_mode))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 GamerModeSection(
                     enabled = showGamerMode,
                     onChange = onGamerModeChange
@@ -206,28 +185,19 @@ fun SettingsScreen(
                 Spacer(Modifier.height(24.dp))
             }
 
-            item(key = "permissions") {
-                SettingsLabel(stringResource(R.string.permissions))
+            item(key = "system_header") {
+                SettingsLabel(stringResource(R.string.system))
                 NeonDivider()
                 Spacer(Modifier.height(12.dp))
-                PermissionSection()
-                Spacer(Modifier.height(24.dp))
             }
 
-            item(key = "statistics") {
-                SettingsLabel(stringResource(R.string.statistics))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+            item(key = "permissions") {
+                PermissionSection()
+                Spacer(Modifier.height(16.dp))
                 StatisticsButton(onStatistics = onStatistics)
                 Spacer(Modifier.height(12.dp))
                 HistoryButton(onHistory = onHistory)
-                Spacer(Modifier.height(24.dp))
-            }
-
-            item(key = "storage") {
-                SettingsLabel(stringResource(R.string.storage))
-                NeonDivider()
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 RescanButton(onRescan = onRescan)
                 Spacer(Modifier.height(24.dp))
             }
@@ -259,19 +229,19 @@ private fun ThemeSelector(
         Triple(stringResource(R.string.light), AppPreferences.THEME_LIGHT, Icons.Rounded.LightMode)
     )
 
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         themes.forEach { (name, value, icon) ->
             val selected = themeMode == value
             Box(
                 modifier = Modifier
-                    .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { onThemeModeChange(value) }
-                    .padding(vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -280,7 +250,7 @@ private fun ThemeSelector(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = name,
                         tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
@@ -853,18 +823,18 @@ private fun PermissionSection() {
 
 @Composable
 private fun AccentColorPicker(
-    selectedColor: Long,
-    onColorSelected: (Long) -> Unit
+    selectedColor: Int,
+    onColorSelected: (Int) -> Unit
 ) {
     val colors = listOf(
-        0xFF8B5CF6L to "Purple",
-        0xFF3B82F6L to "Blue",
-        0xFF06D6A0L to "Green",
-        0xFFFF6B6BL to "Red",
-        0xFFFFB347L to "Orange",
-        0xFFFF69B4L to "Pink",
-        0xFF00D4FFL to "Cyan",
-        0xFFA855F7L to "Violet"
+        0xFF8B5CF6.toInt() to stringResource(R.string.color_purple),
+        0xFF3B82F6.toInt() to stringResource(R.string.color_blue),
+        0xFF06D6A0.toInt() to stringResource(R.string.color_green),
+        0xFFFF6B6B.toInt() to stringResource(R.string.color_red),
+        0xFFFFB347.toInt() to stringResource(R.string.color_orange),
+        0xFFFF69B4.toInt() to stringResource(R.string.color_pink),
+        0xFF00D4FF.toInt() to stringResource(R.string.color_cyan),
+        0xFFA855F7.toInt() to stringResource(R.string.color_violet)
     )
 
     Column {

@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.palette.ktx)
     implementation(libs.hilt.android)
+    implementation(libs.timber)
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)

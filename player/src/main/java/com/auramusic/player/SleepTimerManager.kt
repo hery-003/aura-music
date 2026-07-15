@@ -51,20 +51,7 @@ class SleepTimerManager(
                 preferences.setSleepTimer(durationMinutes * 60L)
             } catch (_: Exception) {}
         }
-        job = scope.launch {
-            try {
-                while (_remainingSeconds.value > 0) {
-                    delay(1000)
-                    _remainingSeconds.value -= 1
-                    if (_remainingSeconds.value <= 30 && _remainingSeconds.value > 0) {
-                        _warningSeconds.value = _remainingSeconds.value
-                    }
-                }
-                _isActive.value = false
-                _warningSeconds.value = 0
-                onTimerEnd()
-            } catch (_: Exception) {}
-        }
+        runTimer()
     }
 
     fun restore(durationMinutes: Int) {
@@ -72,6 +59,10 @@ class SleepTimerManager(
         job = null
         _remainingSeconds.value = durationMinutes * 60L
         _isActive.value = true
+        runTimer()
+    }
+
+    private fun runTimer() {
         job = scope.launch {
             try {
                 while (_remainingSeconds.value > 0) {

@@ -10,7 +10,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -23,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -33,7 +31,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.auramusic.ui.components.MiniPlayer
-import com.auramusic.ui.components.SharedViewModel
+import com.auramusic.ui.components.LibraryViewModel
+import com.auramusic.ui.components.PlayerViewModel
+import com.auramusic.ui.components.SettingsViewModel
 import com.auramusic.ui.components.AddToPlaylistDialog
 import com.auramusic.ui.screens.home.HomeScreen
 import com.auramusic.ui.screens.library.LibraryScreen
@@ -52,8 +52,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
 import com.auramusic.domain.model.Song
 import com.auramusic.data.preferences.AppPreferences
 import com.auramusic.player.EqualizerManager
@@ -85,12 +83,34 @@ data class BottomNavItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(
-    sharedViewModel: SharedViewModel
+    playerViewModel: PlayerViewModel,
+    libraryViewModel: LibraryViewModel,
+    settingsViewModel: SettingsViewModel
 ) {
     val navController = rememberNavController()
-    fun safePopBackStack() {
-        if (navController.previousBackStackEntry != null) {
-            navController.popBackStack()
+    val musicPlayer = playerViewModel.musicPlayer
+    val safePopBackStack = remember {
+        { if (navController.previousBackStackEntry != null) navController.popBackStack() }
+    }
+    val playAllSongs = remember {
+        { songs: List<Song> ->
+            if (songs.isNotEmpty()) {
+                musicPlayer.setQueue(songs, 0)
+                musicPlayer.play()
+                playerViewModel.startPlaybackService()
+                navController.navigate(Routes.NowPlaying.createRoute(songs.first().id))
+            }
+        }
+    }
+    val shufflePlaySongs = remember {
+        { songs: List<Song> ->
+            if (songs.isNotEmpty()) {
+                val shuffled = songs.shuffled()
+                musicPlayer.setQueue(shuffled, 0)
+                musicPlayer.play()
+                playerViewModel.startPlaybackService()
+                navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
+            }
         }
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -106,41 +126,12 @@ fun AppNavigation(
     val bottomNavRoutes = remember { bottomNavItems.map { it.route } }
     val showBottomBar = currentRoute in bottomNavRoutes
 
-    val musicPlayer = remember { sharedViewModel.musicPlayer }
     val currentSong by musicPlayer.currentSong.collectAsStateWithLifecycle()
     val isPlaying by musicPlayer.isPlaying.collectAsStateWithLifecycle()
-    val songs by sharedViewModel.songs.collectAsStateWithLifecycle()
-    val isScanning by sharedViewModel.isScanning.collectAsStateWithLifecycle()
-    val recentlyPlayed by sharedViewModel.recentlyPlayed.collectAsStateWithLifecycle()
-    val favoriteSongs by sharedViewModel.favoriteSongs.collectAsStateWithLifecycle()
-    val mostPlayed by sharedViewModel.mostPlayed.collectAsStateWithLifecycle()
-    val recentlyAdded by sharedViewModel.recentlyAdded.collectAsStateWithLifecycle()
-    val playlists by sharedViewModel.allPlaylists.collectAsStateWithLifecycle()
-    val artists by sharedViewModel.artists.collectAsStateWithLifecycle()
-    val albums by sharedViewModel.albums.collectAsStateWithLifecycle()
-    val genres by sharedViewModel.genres.collectAsStateWithLifecycle()
-    val folders by sharedViewModel.folders.collectAsStateWithLifecycle()
-    val prefs = remember { sharedViewModel.preferences }
-    val themeMode by prefs.themeMode.collectAsStateWithLifecycle(initialValue = 0)
-    val equalizerPreset by prefs.equalizerPreset.collectAsStateWithLifecycle(initialValue = 0)
-    val crossfadeEnabled by prefs.crossfadeEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val crossfadeDuration by prefs.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 3)
-    val showVisualizer by prefs.showVisualizer.collectAsStateWithLifecycle(initialValue = true)
+    val prefs = remember { settingsViewModel.preferences }
     val gamerMode by prefs.gamerMode.collectAsStateWithLifecycle(initialValue = false)
-    val accentColor by prefs.accentColor.collectAsStateWithLifecycle(initialValue = 0xFF8B5CF6L)
-    val audioQuality by prefs.audioQuality.collectAsStateWithLifecycle(initialValue = AppPreferences.AUDIO_QUALITY_NORMAL)
     val animationsEnabled by prefs.animationsEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val playbackSpeed by prefs.playbackSpeed.collectAsStateWithLifecycle(initialValue = 1f)
-
-    val sleepTimerActive by musicPlayer.sleepTimerManager.isActive
-        .collectAsStateWithLifecycle()
-    val sleepTimerWarning by musicPlayer.sleepTimerManager.warningSeconds
-        .collectAsStateWithLifecycle()
-
-    val eqManager = remember { musicPlayer.equalizerManager }
-    val eqBandLevels by eqManager.bandLevels.collectAsStateWithLifecycle()
-    val eqBandFreqs by eqManager.bandFrequencies.collectAsStateWithLifecycle()
-    val eqLevelRange = remember { eqManager.getBandLevelRange() }
+    val playlists by libraryViewModel.allPlaylists.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -149,7 +140,7 @@ fun AppNavigation(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            sharedViewModel.importPlaylist(uri)
+            libraryViewModel.importPlaylist(uri)
         }
     }
     var songToDelete by remember { mutableStateOf<Song?>(null) }
@@ -157,13 +148,13 @@ fun AppNavigation(
     var showQueueSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        sharedViewModel.errorMessage.collect { msg ->
+        libraryViewModel.errorMessage.collect { msg ->
             if (msg != null) {
                 snackbarHostState.showSnackbar(
                     message = msg,
                     duration = SnackbarDuration.Short
                 )
-                sharedViewModel.clearError()
+                libraryViewModel.clearError()
             }
         }
     }
@@ -174,7 +165,7 @@ fun AppNavigation(
         val id = pendingDeleteSongId
         pendingDeleteSongId = null
         if (result.resultCode == Activity.RESULT_OK && id != null) {
-            sharedViewModel.deleteSongFromDb(id)
+            libraryViewModel.deleteSongFromDb(id)
         }
     }
 
@@ -222,10 +213,10 @@ fun AppNavigation(
                         } catch (e: Exception) {
                             Timber.e(e, "Failed to create delete request")
                             pendingDeleteSongId = null
-                            sharedViewModel.deleteSong(s)
+                            libraryViewModel.deleteSong(s)
                         }
                     } else {
-                        sharedViewModel.deleteSong(s)
+                        libraryViewModel.deleteSong(s)
                     }
                 }) {
                     Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
@@ -247,7 +238,7 @@ fun AppNavigation(
                     MiniPlayer(
                         currentSong = currentSong,
                         isPlaying = isPlaying,
-                        onPlayPause = { sharedViewModel.musicPlayer.togglePlayPause() },
+                        onPlayPause = { musicPlayer.togglePlayPause() },
                         onClick = {
                             currentSong?.let {
                                 try {
@@ -303,14 +294,14 @@ fun AppNavigation(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        val addToPlaylistSongId by sharedViewModel.addToPlaylistSongId
+        val addToPlaylistSongId by libraryViewModel.addToPlaylistSongId
             .collectAsStateWithLifecycle()
         if (addToPlaylistSongId != null) {
             AddToPlaylistDialog(
                 playlists = playlists,
-                onDismiss = { sharedViewModel.dismissAddToPlaylistDialog() },
+                onDismiss = { libraryViewModel.dismissAddToPlaylistDialog() },
                 onSelectPlaylist = { playlistId ->
-                    sharedViewModel.confirmAddToPlaylist(playlistId)
+                    libraryViewModel.confirmAddToPlaylist(playlistId)
                 }
             )
         }
@@ -373,7 +364,7 @@ fun AppNavigation(
                     permissionsReady = granted
                     if (granted) {
                         try {
-                            sharedViewModel.scanMusic()
+                            libraryViewModel.scanMusic()
                         } catch (e: Exception) {
                             Timber.e(e, "Error scanning music")
                         }
@@ -381,7 +372,7 @@ fun AppNavigation(
                 }
 
                 val onboardingShown by prefs.onboardingShown
-                    .collectAsStateWithLifecycle(initialValue = true)
+                    .collectAsStateWithLifecycle(initialValue = false)
 
                 SplashScreen(
                     onSplashFinished = {
@@ -402,6 +393,12 @@ fun AppNavigation(
             }
 
             composable(Routes.Home.route) {
+                val recentlyPlayed by libraryViewModel.recentlyPlayed.collectAsStateWithLifecycle()
+                val favoriteSongs by libraryViewModel.favoriteSongs.collectAsStateWithLifecycle()
+                val mostPlayed by libraryViewModel.mostPlayed.collectAsStateWithLifecycle()
+                val recentlyAdded by libraryViewModel.recentlyAdded.collectAsStateWithLifecycle()
+                val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
+                val isScanning by libraryViewModel.isScanning.collectAsStateWithLifecycle()
                 HomeScreen(
                     onNavigateToLibrary = { navController.navigate(Routes.Library.route) },
                     onNavigateToSearch = { navController.navigate(Routes.Search.route) },
@@ -419,9 +416,9 @@ fun AppNavigation(
                     onNavigateToAlbum = { albumId ->
                         navController.navigate(Routes.AlbumSongs.createRoute(albumId))
                     },
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it.id) },
+                    onPlaySong = { playerViewModel.playSong(it) },
+                    onToggleFavorite = { playerViewModel.toggleFavorite(it) },
+                    onSongMoreOptions = { libraryViewModel.showAddToPlaylistDialog(it.id) },
                     recentlyPlayed = recentlyPlayed,
                     favoriteSongs = favoriteSongs,
                     mostPlayed = mostPlayed,
@@ -429,33 +426,49 @@ fun AppNavigation(
                     playlists = playlists,
                     albums = albums,
                     isScanning = isScanning,
-                    onScan = { sharedViewModel.scanMusic() },
+                    onScan = { libraryViewModel.scanMusic() },
                     onCreatePlaylist = { navController.navigate(Routes.CreatePlaylist.route) },
                     currentSongId = currentSong?.id
                 )
             }
 
             composable(Routes.Library.route) {
+                val songs by libraryViewModel.songs.collectAsStateWithLifecycle()
+                val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
+                val artists by libraryViewModel.artists.collectAsStateWithLifecycle()
+                val genres by libraryViewModel.genres.collectAsStateWithLifecycle()
+                val folders by libraryViewModel.folders.collectAsStateWithLifecycle()
                 LibraryScreen(
-                    songs = songs,
-                    artists = artists,
-                    albums = albums,
-                    genres = genres,
-                    folders = folders,
-                    playlists = playlists,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it.id) },
+                    onNavigateToNowPlaying = { songId ->
+                        try {
+                            navController.navigate(Routes.NowPlaying.createRoute(songId))
+                        } catch (e: Exception) { Timber.e(e, "Navigation failed") }
+                    },
+                    onPlaySong = { song ->
+                        val idx = songs.indexOf(song)
+                        if (idx >= 0) {
+                            musicPlayer.setQueue(songs, idx)
+                            musicPlayer.play()
+                            playerViewModel.startPlaybackService()
+                        }
+                    },
+                    onToggleFavorite = { playerViewModel.toggleFavorite(it) },
+                    onSongMoreOptions = { libraryViewModel.showAddToPlaylistDialog(it.id) },
+                    onPlayNext = { playerViewModel.playSongNext(it) },
+                    onAddToQueue = { playerViewModel.addToQueue(it) },
                     onDeleteSong = { songToDelete = it },
-                    onNavigateToPlaylist = { navController.navigate(Routes.PlaylistDetail.createRoute(it)) },
-                    onNavigateToNowPlaying = { navController.navigate(Routes.NowPlaying.createRoute(it)) },
+                    onAlbumClick = { albumId ->
+                        navController.navigate(Routes.AlbumSongs.createRoute(albumId))
+                    },
                     onCreatePlaylist = { navController.navigate(Routes.CreatePlaylist.route) },
+                    onNavigateToPlaylist = { playlistId ->
+                        try {
+                            navController.navigate(Routes.PlaylistDetail.createRoute(playlistId))
+                        } catch (e: Exception) { Timber.e(e, "Navigation failed") }
+                    },
                     onImportPlaylist = { importPlaylistLauncher.launch(arrayOf("application/json")) },
                     onArtistClick = { artistName ->
                         navController.navigate(Routes.ArtistSongs.createRoute(artistName))
-                    },
-                    onAlbumClick = { albumId ->
-                        navController.navigate(Routes.AlbumSongs.createRoute(albumId))
                     },
                     onGenreClick = { genreName ->
                         navController.navigate(Routes.GenreSongs.createRoute(genreName))
@@ -463,18 +476,26 @@ fun AppNavigation(
                     onFolderClick = { folderPath ->
                         navController.navigate(Routes.FolderSongs.createRoute(folderPath))
                     },
+                    onPlayAll = { playAllSongs(songs) },
+                    onShufflePlay = { shufflePlaySongs(songs) },
+                    songs = songs,
+                    albums = albums,
+                    artists = artists,
+                    genres = genres,
+                    folders = folders,
+                    playlists = playlists,
                     currentSongId = currentSong?.id
                 )
             }
 
             composable(Routes.Search.route) {
-                val allArtists by sharedViewModel.artists.collectAsStateWithLifecycle()
-                val allAlbums by sharedViewModel.albums.collectAsStateWithLifecycle()
-                val searchHistory by sharedViewModel.searchHistory.collectAsStateWithLifecycle()
+                val allArtists by libraryViewModel.artists.collectAsStateWithLifecycle()
+                val allAlbums by libraryViewModel.albums.collectAsStateWithLifecycle()
+                val searchHistory by libraryViewModel.searchHistory.collectAsStateWithLifecycle()
                 SearchScreen(
-                    onSearch = { query -> sharedViewModel.searchSongs(query) },
-                    onSearchPlaylists = { query -> sharedViewModel.searchPlaylists(query) },
-                    onSearchFolders = { query -> sharedViewModel.searchFolders(query) },
+                    onSearch = { query -> libraryViewModel.searchSongs(query) },
+                    onSearchPlaylists = { query -> libraryViewModel.searchPlaylists(query) },
+                    onSearchFolders = { query -> libraryViewModel.searchFolders(query) },
                     onSearchArtists = { query ->
                         if (query.isBlank()) emptyList()
                         else allArtists.filter { it.contains(query, ignoreCase = true) }
@@ -483,12 +504,12 @@ fun AppNavigation(
                         if (query.isBlank()) emptyList()
                         else allAlbums.filter { it.title.contains(query, ignoreCase = true) }
                     },
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onPlayNext = { sharedViewModel.playSongNext(it) },
-                    onAddToQueue = { sharedViewModel.addToQueue(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onBack = { safePopBackStack() },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it.id) },
+                    onPlaySong = { playerViewModel.playSong(it) },
+                    onPlayNext = { playerViewModel.playSongNext(it) },
+                    onAddToQueue = { playerViewModel.addToQueue(it) },
+                    onToggleFavorite = { playerViewModel.toggleFavorite(it) },
+                    onBack = safePopBackStack,
+                    onSongMoreOptions = { libraryViewModel.showAddToPlaylistDialog(it.id) },
                     onDeleteSong = { songToDelete = it },
                     onPlaylistClick = { navController.navigate(Routes.PlaylistDetail.createRoute(it)) },
                     onFolderClick = { folderPath ->
@@ -501,13 +522,27 @@ fun AppNavigation(
                         navController.navigate(Routes.AlbumSongs.createRoute(albumId))
                     },
                     searchHistory = searchHistory,
-                    onClearSearchHistory = { sharedViewModel.clearSearchHistory() },
+                    onClearSearchHistory = { libraryViewModel.clearSearchHistory() },
                     currentSongId = currentSong?.id,
                     animationsEnabled = animationsEnabled
                 )
             }
 
             composable(Routes.Settings.route) {
+                val settingsPrefs = remember { settingsViewModel.preferences }
+                val themeMode by settingsPrefs.themeMode.collectAsStateWithLifecycle(initialValue = 0)
+                val equalizerPreset by settingsPrefs.equalizerPreset.collectAsStateWithLifecycle(initialValue = 0)
+                val crossfadeEnabled by settingsPrefs.crossfadeEnabled.collectAsStateWithLifecycle(initialValue = false)
+                val crossfadeDuration by settingsPrefs.crossfadeDuration.collectAsStateWithLifecycle(initialValue = 3)
+                val showVisualizer by settingsPrefs.showVisualizer.collectAsStateWithLifecycle(initialValue = true)
+                val accentColor by settingsPrefs.accentColor.collectAsStateWithLifecycle(initialValue = 0xFF8B5CF6.toInt())
+                val audioQuality by settingsPrefs.audioQuality.collectAsStateWithLifecycle(initialValue = AppPreferences.AUDIO_QUALITY_NORMAL)
+                val playbackSpeed by settingsPrefs.playbackSpeed.collectAsStateWithLifecycle(initialValue = 1f)
+                val sleepTimerActive by musicPlayer.sleepTimerManager.isActive.collectAsStateWithLifecycle()
+                val eqManager = remember { musicPlayer.equalizerManager }
+                val eqBandLevels by eqManager.bandLevels.collectAsStateWithLifecycle()
+                val eqBandFreqs by eqManager.bandFrequencies.collectAsStateWithLifecycle()
+                val eqLevelRange = remember { eqManager.getBandLevelRange() }
                 var previousPreset by rememberSaveable { mutableIntStateOf(EqualizerManager.PRESET_NORMAL) }
                 SettingsScreen(
                     themeMode = themeMode,
@@ -523,43 +558,43 @@ fun AppNavigation(
                     customEqBands = eqBandLevels,
                     bandFrequencies = eqBandFreqs,
                     eqBandLevelRange = eqLevelRange,
-                    onAccentColorChange = { scope.launch { sharedViewModel.preferences.setAccentColor(it) } },
-                    onThemeModeChange = { scope.launch { sharedViewModel.preferences.setThemeMode(it) } },
+                    onAccentColorChange = { scope.launch { settingsPrefs.setAccentColor(it) } },
+                    onThemeModeChange = { scope.launch { settingsPrefs.setThemeMode(it) } },
                     onEqualizerPresetChange = { preset ->
-                        sharedViewModel.setEqualizerPreset(preset)
+                        settingsViewModel.setEqualizerPreset(preset)
                         if (preset == EqualizerManager.PRESET_CUSTOM) {
-                            sharedViewModel.loadCustomEqualizerBands()
+                            settingsViewModel.loadCustomEqualizerBands()
                         }
                     },
                     onCustomBandLevelChange = { bandIndex, level ->
-                        sharedViewModel.setCustomEqualizerBand(bandIndex, level)
+                        settingsViewModel.setCustomEqualizerBand(bandIndex, level)
                     },
                     onCrossfadeEnabledChange = { enabled ->
-                        sharedViewModel.setCrossfade(enabled, crossfadeDuration)
+                        playerViewModel.setCrossfade(enabled, crossfadeDuration)
                     },
                     onCrossfadeDurationChange = { duration ->
-                        sharedViewModel.setCrossfade(crossfadeEnabled, duration)
+                        playerViewModel.setCrossfade(crossfadeEnabled, duration)
                     },
-                    onShowVisualizerChange = { scope.launch { sharedViewModel.preferences.setShowVisualizer(it) } },
+                    onShowVisualizerChange = { scope.launch { settingsPrefs.setShowVisualizer(it) } },
                     onGamerModeChange = { enabled ->
-                        scope.launch { sharedViewModel.preferences.setGamerMode(enabled) }
+                        scope.launch { settingsPrefs.setGamerMode(enabled) }
                         if (enabled) {
                             previousPreset = equalizerPreset
-                            sharedViewModel.setEqualizerPreset(EqualizerManager.PRESET_GAMER)
+                            settingsViewModel.setEqualizerPreset(EqualizerManager.PRESET_GAMER)
                         } else {
-                            sharedViewModel.setEqualizerPreset(previousPreset)
+                            settingsViewModel.setEqualizerPreset(previousPreset)
                         }
                     },
-                    onAudioQualityChange = { sharedViewModel.setAudioQuality(it) },
-                    onAnimationsEnabledChange = { sharedViewModel.setAnimationsEnabled(it) },
+                    onAudioQualityChange = { playerViewModel.setAudioQuality(it) },
+                    onAnimationsEnabledChange = { playerViewModel.setAnimationsEnabled(it) },
                     playbackSpeed = playbackSpeed,
                     onPlaybackSpeedChange = { musicPlayer.setPlaybackSpeed(it) },
-                    onRescan = { sharedViewModel.scanMusic() },
-                    onBack = { safePopBackStack() },
+                    onRescan = { libraryViewModel.scanMusic() },
+                    onBack = safePopBackStack,
                     onStatistics = { navController.navigate(Routes.Statistics.route) },
                     onHistory = { navController.navigate(Routes.History.route) },
-                    onSleepTimerStart = { sharedViewModel.startSleepTimer(it) },
-                    onSleepTimerStop = { sharedViewModel.stopSleepTimer() }
+                    onSleepTimerStart = { playerViewModel.startSleepTimer(it) },
+                    onSleepTimerStop = { playerViewModel.stopSleepTimer() }
                 )
             }
 
@@ -575,10 +610,11 @@ fun AppNavigation(
             }
 
             composable(Routes.History.route) {
+                val recentlyPlayed by libraryViewModel.recentlyPlayed.collectAsStateWithLifecycle()
                 HistoryScreen(
                     recentlyPlayed = recentlyPlayed,
-                    onSongClick = { sharedViewModel.playSong(it) },
-                    onBack = { safePopBackStack() },
+                    onSongClick = { playerViewModel.playSong(it) },
+                    onBack = safePopBackStack,
                     currentSongId = currentSong?.id
                 )
             }
@@ -630,6 +666,11 @@ fun AppNavigation(
                     .collectAsStateWithLifecycle()
                 val lyricData by musicPlayer.lyricData
                     .collectAsStateWithLifecycle()
+                val sleepTimerActive by musicPlayer.sleepTimerManager.isActive
+                    .collectAsStateWithLifecycle()
+                val sleepTimerWarning by musicPlayer.sleepTimerManager.warningSeconds
+                    .collectAsStateWithLifecycle()
+                val showVisualizer by prefs.showVisualizer.collectAsStateWithLifecycle(initialValue = true)
 
                 NowPlayingScreen(
                     currentSong = currentSong,
@@ -646,18 +687,18 @@ fun AppNavigation(
                     onToggleShuffle = { musicPlayer.toggleShuffle() },
                     onToggleRepeat = { musicPlayer.toggleRepeatMode() },
                     onToggleFavorite = {
-                        currentSong?.let { sharedViewModel.toggleFavorite(it) }
+                        currentSong?.let { playerViewModel.toggleFavorite(it) }
                     },
-                    onBack = { safePopBackStack() },
+                    onBack = safePopBackStack,
                     onQueue = { showQueueSheet = true },
                     onSpeedChange = { musicPlayer.setPlaybackSpeed(it) },
                     sleepTimerActive = sleepTimerActive,
                     sleepTimerWarning = sleepTimerWarning,
                     onSleepTimerClick = {
                         if (sleepTimerActive) {
-                            sharedViewModel.stopSleepTimer()
+                            playerViewModel.stopSleepTimer()
                         } else {
-                            sharedViewModel.startSleepTimer(15)
+                            playerViewModel.startSleepTimer(15)
                         }
                     },
                     dominantColor = dominantColor,
@@ -678,7 +719,7 @@ fun AppNavigation(
             ) { backStackEntry ->
                 val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: return@composable
                 val playlist = playlists.find { it.id == playlistId }
-                val playlistSongs by sharedViewModel.repository.getPlaylistSongs(playlistId)
+                val playlistSongs by libraryViewModel.repository.getPlaylistSongs(playlistId)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
 
                 PlaylistDetailScreen(
@@ -686,38 +727,34 @@ fun AppNavigation(
                     playlistName = playlist?.name ?: stringResource(R.string.playlists),
                     playlistDescription = playlist?.description ?: "",
                     songs = playlistSongs,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
+                    onPlaySong = { song ->
+                        val idx = playlistSongs.indexOf(song)
+                        if (idx >= 0) {
+                            musicPlayer.setQueue(playlistSongs, idx)
+                            musicPlayer.play()
+                            playerViewModel.startPlaybackService()
+                        }
+                    },
+                    onToggleFavorite = { playerViewModel.toggleFavorite(it) },
                     onDeleteSong = { songToDelete = it },
                     onRemoveSong = { songId ->
-                        sharedViewModel.removeSongFromPlaylist(playlistId, songId)
+                        libraryViewModel.removeSongFromPlaylist(playlistId, songId)
                     },
-                    onPlayAll = {
-                        if (playlistSongs.isNotEmpty()) {
-                            musicPlayer.setQueue(playlistSongs, 0)
-                            musicPlayer.play()
-                        }
-                    },
-                    onShufflePlay = {
-                        if (playlistSongs.isNotEmpty()) {
-                            val shuffled = playlistSongs.shuffled()
-                            musicPlayer.setQueue(shuffled, 0)
-                            musicPlayer.play()
-                        }
-                    },
-                    onBack = { safePopBackStack() },
+                    onPlayAll = { playAllSongs(playlistSongs) },
+                    onShufflePlay = { shufflePlaySongs(playlistSongs) },
+                    onBack = safePopBackStack,
                     onDeletePlaylist = {
-                        sharedViewModel.deletePlaylist(playlistId)
+                        libraryViewModel.deletePlaylist(playlistId)
                         safePopBackStack()
                     },
                     onReorderSongs = { songIds ->
-                        sharedViewModel.reorderPlaylistSongs(playlistId, songIds)
+                        libraryViewModel.reorderPlaylistSongs(playlistId, songIds)
                     },
                     onEditPlaylist = { _, name, desc ->
-                        sharedViewModel.updatePlaylistName(playlistId, name, desc)
+                        libraryViewModel.updatePlaylistName(playlistId, name, desc)
                     },
                     onExportPlaylist = {
-                        sharedViewModel.exportPlaylist(context, playlistId)
+                        libraryViewModel.exportPlaylist(context, playlistId)
                     },
                     currentSongId = currentSong?.id
                 )
@@ -725,17 +762,25 @@ fun AppNavigation(
 
             composable(Routes.CreatePlaylist.route) {
                 CreatePlaylistScreen(
-                    onBack = { safePopBackStack() },
+                    onBack = safePopBackStack,
                     onCreatePlaylist = { name, desc ->
-                        sharedViewModel.createPlaylist(name, desc)
+                        libraryViewModel.createPlaylist(name, desc)
                         safePopBackStack()
                     }
                 )
             }
 
             composable(Routes.Statistics.route) {
-                val listenTime by sharedViewModel.totalListeningTime
+                val listenTime by playerViewModel.totalListeningTime
                     .collectAsStateWithLifecycle(initialValue = 0L)
+                val songCount by libraryViewModel.songCount
+                    .collectAsStateWithLifecycle(initialValue = 0)
+                val artistCount by libraryViewModel.artistCount
+                    .collectAsStateWithLifecycle(initialValue = 0)
+                val albumCount by libraryViewModel.albumCount
+                    .collectAsStateWithLifecycle(initialValue = 0)
+                val mostPlayed by libraryViewModel.mostPlayed
+                    .collectAsStateWithLifecycle(initialValue = emptyList())
                 val topSongs = mostPlayed.take(5)
                 val topArtistNames = remember(mostPlayed) {
                     mostPlayed
@@ -745,20 +790,51 @@ fun AppNavigation(
                         .take(5)
                         .map { it.key }
                 }
-                val favoriteSongs by sharedViewModel.favoriteSongs
+                val favoriteSongs by libraryViewModel.favoriteSongs
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                val recentlyPlayed by sharedViewModel.recentlyPlayed
+                val recentlyPlayed by libraryViewModel.recentlyPlayed
                     .collectAsStateWithLifecycle(initialValue = emptyList())
                 StatisticsScreen(
-                    totalSongs = songs.size,
-                    totalArtists = artists.size,
-                    totalAlbums = albums.size,
+                    totalSongs = songCount,
+                    totalArtists = artistCount,
+                    totalAlbums = albumCount,
                     totalListeningTimeMinutes = listenTime / 60,
                     topSongs = topSongs,
                     topArtistNames = topArtistNames,
                     favoriteSongs = favoriteSongs,
                     recentlyPlayed = recentlyPlayed,
-                    onBack = { safePopBackStack() }
+                    onBack = safePopBackStack
+                )
+            }
+
+            @Composable
+            fun SongListContent(
+                songs: List<Song>,
+                title: String,
+                subtitle: String
+            ) {
+                SongListScreen(
+                    title = title,
+                    subtitle = subtitle,
+                    songs = songs,
+                    onPlaySong = { song ->
+                        val idx = songs.indexOf(song)
+                        if (idx >= 0) {
+                            musicPlayer.setQueue(songs, idx)
+                            musicPlayer.play()
+                            playerViewModel.startPlaybackService()
+                        }
+                    },
+                    onToggleFavorite = { playerViewModel.toggleFavorite(it) },
+                    onSongMoreOptions = { libraryViewModel.showAddToPlaylistDialog(it) },
+                    onPlayNext = { playerViewModel.playSongNext(it) },
+                    onAddToQueue = { playerViewModel.addToQueue(it) },
+                    onDeleteSong = { songToDelete = it },
+                    onBack = safePopBackStack,
+                    onPlayAll = { playAllSongs(songs) },
+                    onShufflePlay = { shufflePlaySongs(songs) },
+                    currentSongId = currentSong?.id,
+                    animationsEnabled = animationsEnabled
                 )
             }
 
@@ -767,31 +843,9 @@ fun AppNavigation(
                 arguments = listOf(navArgument("artistName") { type = NavType.StringType })
             ) { backStackEntry ->
                 val artistName = Uri.decode(backStackEntry.arguments?.getString("artistName") ?: return@composable)
-                val artistSongs by sharedViewModel.repository.getSongsByArtist(artistName)
+                val artistSongs by libraryViewModel.repository.getSongsByArtist(artistName)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                SongListScreen(
-                    title = artistName,
-                    subtitle = stringResource(R.string.artist),
-                    songs = artistSongs,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it) },
-                    onDeleteSong = { songToDelete = it },
-                    onBack = { safePopBackStack() },
-                    onPlayAll = {
-                        musicPlayer.setQueue(artistSongs, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(artistSongs.first().id))
-                    },
-                    onShufflePlay = {
-                        val shuffled = artistSongs.shuffled()
-                        musicPlayer.setQueue(shuffled, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
-                    },
-                    currentSongId = currentSong?.id,
-                    animationsEnabled = animationsEnabled
-                )
+                SongListContent(songs = artistSongs, title = artistName, subtitle = stringResource(R.string.artist))
             }
 
             composable(
@@ -799,32 +853,10 @@ fun AppNavigation(
                 arguments = listOf(navArgument("albumId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
-                val albumSongs by sharedViewModel.repository.getSongsByAlbum(albumId)
+                val albumSongs by libraryViewModel.repository.getSongsByAlbum(albumId)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
                 val albumTitle = albumSongs.firstOrNull()?.album ?: ""
-                SongListScreen(
-                    title = albumTitle,
-                    subtitle = stringResource(R.string.album),
-                    songs = albumSongs,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it) },
-                    onDeleteSong = { songToDelete = it },
-                    onBack = { safePopBackStack() },
-                    onPlayAll = {
-                        musicPlayer.setQueue(albumSongs, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(albumSongs.first().id))
-                    },
-                    onShufflePlay = {
-                        val shuffled = albumSongs.shuffled()
-                        musicPlayer.setQueue(shuffled, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
-                    },
-                    currentSongId = currentSong?.id,
-                    animationsEnabled = animationsEnabled
-                )
+                SongListContent(songs = albumSongs, title = albumTitle, subtitle = stringResource(R.string.album))
             }
 
             composable(
@@ -832,31 +864,9 @@ fun AppNavigation(
                 arguments = listOf(navArgument("genreName") { type = NavType.StringType })
             ) { backStackEntry ->
                 val genreName = Uri.decode(backStackEntry.arguments?.getString("genreName") ?: return@composable)
-                val genreSongs by sharedViewModel.repository.getSongsByGenre(genreName)
+                val genreSongs by libraryViewModel.repository.getSongsByGenre(genreName)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                SongListScreen(
-                    title = genreName,
-                    subtitle = stringResource(R.string.genre),
-                    songs = genreSongs,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it) },
-                    onDeleteSong = { songToDelete = it },
-                    onBack = { safePopBackStack() },
-                    onPlayAll = {
-                        musicPlayer.setQueue(genreSongs, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(genreSongs.first().id))
-                    },
-                    onShufflePlay = {
-                        val shuffled = genreSongs.shuffled()
-                        musicPlayer.setQueue(shuffled, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
-                    },
-                    currentSongId = currentSong?.id,
-                    animationsEnabled = animationsEnabled
-                )
+                SongListContent(songs = genreSongs, title = genreName, subtitle = stringResource(R.string.genre))
             }
 
             composable(
@@ -864,37 +874,16 @@ fun AppNavigation(
                 arguments = listOf(navArgument("folderPath") { type = NavType.StringType })
             ) { backStackEntry ->
                 val folderPath = Uri.decode(backStackEntry.arguments?.getString("folderPath") ?: return@composable)
-                val folderSongs by sharedViewModel.repository.getSongsByPathPrefix(folderPath)
+                val folderSongs by libraryViewModel.repository.getSongsByPathPrefix(folderPath)
                     .collectAsStateWithLifecycle(initialValue = emptyList())
                 val folderName = folderPath.substringAfterLast(java.io.File.separator)
-                SongListScreen(
-                    title = folderName,
-                    subtitle = stringResource(R.string.folder),
-                    songs = folderSongs,
-                    onPlaySong = { sharedViewModel.playSong(it) },
-                    onToggleFavorite = { sharedViewModel.toggleFavorite(it) },
-                    onSongMoreOptions = { sharedViewModel.showAddToPlaylistDialog(it) },
-                    onDeleteSong = { songToDelete = it },
-                    onBack = { safePopBackStack() },
-                    onPlayAll = {
-                        musicPlayer.setQueue(folderSongs, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(folderSongs.first().id))
-                    },
-                    onShufflePlay = {
-                        val shuffled = folderSongs.shuffled()
-                        musicPlayer.setQueue(shuffled, 0)
-                        musicPlayer.play()
-                        navController.navigate(Routes.NowPlaying.createRoute(shuffled.first().id))
-                    },
-                    currentSongId = currentSong?.id,
-                    animationsEnabled = animationsEnabled
-                )
+                SongListContent(songs = folderSongs, title = folderName, subtitle = stringResource(R.string.folder))
             }
         }
 
         if (showQueueSheet) {
             val queue by musicPlayer.queue.collectAsStateWithLifecycle()
+            val currentIdx by musicPlayer.currentIndex.collectAsStateWithLifecycle()
             ModalBottomSheet(
                 onDismissRequest = { showQueueSheet = false },
                 containerColor = MaterialTheme.colorScheme.background
@@ -904,13 +893,25 @@ fun AppNavigation(
                         .fillMaxWidth()
                         .padding(bottom = 32.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.queue),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.queue),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (queue.isNotEmpty()) {
+                            TextButton(onClick = { musicPlayer.clearQueue() }) {
+                                Text(stringResource(R.string.clear_all), color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
                     if (queue.isEmpty()) {
                         Text(
                             text = stringResource(R.string.queue_empty),
@@ -923,27 +924,54 @@ fun AppNavigation(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "${index + 1}",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.width(32.dp)
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        IconButton(
+                                            onClick = {
+                                                if (index > 0) musicPlayer.moveInQueue(index, index - 1)
+                                            },
+                                            enabled = index > 0,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.KeyboardArrowUp,
+                                                contentDescription = stringResource(R.string.move_up),
+                                                tint = if (index > 0) MaterialTheme.colorScheme.onSurfaceVariant
+                                                       else MaterialTheme.colorScheme.surfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                if (index < queue.size - 1) musicPlayer.moveInQueue(index, index + 1)
+                                            },
+                                            enabled = index < queue.size - 1,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.KeyboardArrowDown,
+                                                contentDescription = stringResource(R.string.move_down),
+                                                tint = if (index < queue.size - 1) MaterialTheme.colorScheme.onSurfaceVariant
+                                                       else MaterialTheme.colorScheme.surfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
                                     com.auramusic.ui.components.SongItem(
                                         song = song,
                                         onClick = {
-                                            musicPlayer.exoPlayer?.seekTo(index, 0L)
+                                            musicPlayer.seekToMediaItem(index)
                                             musicPlayer.play()
                                             showQueueSheet = false
                                         },
                                         onPlayNext = { musicPlayer.playSongNext(song); showQueueSheet = false },
                                         onAddToQueue = { musicPlayer.addToQueue(song) },
-                                        onFavoriteToggle = { sharedViewModel.toggleFavorite(song) },
-                                        onAddToPlaylist = { sharedViewModel.showAddToPlaylistDialog(song.id) },
-                                        onDeleteSong = { songToDelete = song }
+                                        onFavoriteToggle = { playerViewModel.toggleFavorite(song) },
+                                        onAddToPlaylist = { libraryViewModel.showAddToPlaylistDialog(song.id) },
+                                        onDeleteSong = { songToDelete = song },
+                                        isCurrentlyPlaying = index == currentIdx
                                     )
                                     IconButton(onClick = { musicPlayer.removeFromQueue(index) }) {
                                         Icon(
@@ -951,14 +979,14 @@ fun AppNavigation(
                                             contentDescription = stringResource(R.string.remove),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
-}
-}
-        }
-    }
 }

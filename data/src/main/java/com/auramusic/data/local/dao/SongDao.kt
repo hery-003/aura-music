@@ -67,6 +67,12 @@ interface SongDao {
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun getSongCount(): Int
 
+    @Query("SELECT COUNT(DISTINCT artist) FROM songs")
+    suspend fun getArtistCount(): Int
+
+    @Query("SELECT COUNT(DISTINCT album_id) FROM songs")
+    suspend fun getAlbumCount(): Int
+
     @Query("SELECT DISTINCT genre FROM songs WHERE genre IS NOT NULL AND genre != 'Unknown' ORDER BY genre ASC")
     fun getAllGenres(): Flow<List<String>>
 
@@ -84,6 +90,12 @@ interface SongDao {
 
     @Query("SELECT * FROM songs WHERE path LIKE :prefix || '%'")
     fun getSongsByPathPrefix(prefix: String): Flow<List<SongEntity>>
+
+    @Query("SELECT id FROM songs")
+    suspend fun getAllSongIds(): List<Long>
+
+    @Query("DELETE FROM songs WHERE id IN (:ids)")
+    suspend fun deleteSongsByIds(ids: List<Long>)
 }
 
 data class AlbumInfo(
